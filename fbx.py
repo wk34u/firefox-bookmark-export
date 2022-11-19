@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 
 import argparse
+import os
 import sqlite3
 import sys
 
@@ -69,7 +70,11 @@ def get_opts(argv):
         if args.profile:
             p = Path(args.profile)
         else:
-            p = Path("~/.mozilla/firefox").expanduser().resolve()
+            windows_appdata = os.getenv("APPDATA")
+            if windows_appdata:
+                p = Path(windows_appdata) / "Mozilla" / "Firefox" / "Profiles"
+            else:
+                p = Path("~/.mozilla/firefox").expanduser().resolve()
 
         if not p.exists():
             sys.stderr.write(f"\nERROR: Cannot find folder '{p}'\n")
