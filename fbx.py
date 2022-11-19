@@ -92,9 +92,6 @@ def get_opts(argv):
         sys.stderr.write("\nERROR: No profile or file name specified.'\n")
         sys.exit(1)
 
-    out_dir = None
-    output_file = None
-
     if args.output_folder:
         out_dir = Path(args.output_folder).expanduser().resolve()
     else:
