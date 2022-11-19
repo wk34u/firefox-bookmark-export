@@ -1,0 +1,14 @@
+# Private archives, notes, etc.
+private/
+notes-private.txt
+
+# Python.
+venv/
+__pycache__/
+
+# Tools config.
+.vscode/
+
+# App-specific.
+_0_bak/
+
