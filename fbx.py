@@ -2,6 +2,7 @@
 
 import argparse
 import os
+import socket
 import sqlite3
 import sys
 
@@ -14,6 +15,10 @@ from textwrap import dedent, indent
 
 
 app_name = "fbx.py"
+
+app_version = "230112.1"
+
+app_title = f"{app_name} (v.{app_version})"
 
 run_dt = datetime.now()
 
@@ -168,12 +173,12 @@ def html_tail():
         """
         </ul>
         <div id="footer">
-          Created by {0} at {1}.
+          Created {0} by {1}.
         </div>
         </body>
         </html>
         """
-    ).format(app_name, run_dt.strftime("%Y-%m-%d %H:%M"))
+    ).format(run_dt.strftime("%Y-%m-%d %H:%M"), app_title)
 
 
 def get_parent_path(con, id):
@@ -288,7 +293,10 @@ def write_bookmarks_html(opts: AppOptions, con: sqlite3.Connection):
         f.write(html_head("Bookmarks"))
 
         dt = run_dt.strftime("%Y-%m-%d %H:%M")
-        f.write(f'<p><span id="asof">(as of {dt})</span></p>\n')
+        hn = f"'{socket.gethostname()}'"
+        f.write(
+            f'<p><span id="asof">(on host {hn} as of {dt})</span></p>\n'
+        )
 
         for bmk in bmks:
             title = limited(ascii(bmk.title))
