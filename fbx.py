@@ -10,21 +10,26 @@ from collections import namedtuple
 from datetime import datetime
 from pathlib import Path
 from textwrap import dedent, indent
-
+from typing import List, Tuple
 # from rich import print
 
 
 app_name = "fbx.py"
 
-app_version = "230112.1"
+app_version = "230206.1"
 
 app_title = f"{app_name} (v.{app_version})"
 
 run_dt = datetime.now()
 
-AppOptions = namedtuple("AppOptions", "places_file, output_file")
+AppOptions = namedtuple(
+    "AppOptions",
+    "places_file, output_file, bydate_file, out_db, in_db, host_name",
+)
 
-Bookmark = namedtuple("Bookmark", "title, url, parent_path")
+Bookmark = namedtuple(
+    "Bookmark", "title, url, parent_path, when_added, host_name, asof_dt"
+)
 
 
 def get_args(argv):
@@ -59,6 +64,45 @@ def get_args(argv):
         dest="output_folder",
         action="store",
         help="Name of the folder in which to create the output HTML file.",
+    )
+
+    ap.add_argument(
+        "--by-date",
+        dest="do_bydate",
+        action="store_true",
+        help="Also produce an output file listing bookmarks by date added "
+        "(most recent first). The name of the output file will be the same "
+        "as the main output file with '-bydate' added to the file name.",
+    )
+
+    ap.add_argument(
+        "--output-sqlite",
+        dest="output_db",
+        action="store",
+        help="Name of the SQLite database file to produce instead of HTML "
+        "files. This overrides the --output-name and --by-date options, "
+        "but still uses the --output-folder option. If the database file "
+        "already exists, new data is appended (but only if from a "
+        "different host).",
+    )
+
+    ap.add_argument(
+        "--host-name",
+        dest="host_name",
+        action="store",
+        help="Use a specified host name, instead of the current machine's "
+        "host name. This is useful when reading data from a copy of a "
+        "'places.sqlite' file taken from another machine.",
+    )
+
+    ap.add_argument(
+        "--from-sqlite",
+        dest="source_db",
+        action="store",
+        help="Name of a SQLite database, previously created by {0}, from "
+        "which to get the list of bookmarks for producing the HTML output "
+        "files. This must be the full path to the file (unless it is in "
+        "the current directory)".format(app_name),
     )
 
     return ap.parse_args(argv[1:])
@@ -102,17 +146,48 @@ def get_opts(argv):
     else:
         out_dir = Path.home().joinpath("Desktop")
 
+    if args.output_db:
+        out_db = Path(args.output_db)
+        out_db = Path(out_db.stem).with_suffix(".sqlite")
+        if not out_db.is_absolute():
+            out_db = out_dir.joinpath(out_db.name)
+    else:
+        out_db = None
+
+    if args.source_db:
+        in_db = Path(args.source_db)
+        if not in_db.exists():
+            sys.stderr.write(f"\nERROR: Cannot find '{in_db}'\n")
+            sys.exit(1)
+    else:
+        in_db = None
+
+    if args.host_name:
+        host_name = args.host_name
+    else:
+        host_name = socket.gethostname()
+
     if args.output_file:
         out_file = Path(args.output_file)
         out_file = Path(out_file.stem).with_suffix(".html")
     else:
         out_file = Path(
-            f"Firefox-bookmarks-{run_dt.strftime('%y%m%d_%H%M%S')}.html"
+            f"Firefox-bookmarks-{host_name}-"
+            f"{run_dt.strftime('%y%m%d_%H%M')}.html"
         )
 
     output_file = out_dir.joinpath(out_file.name)
 
-    return AppOptions(places_file, output_file)
+    if args.do_bydate:
+        bydate_file = output_file.parent.joinpath(
+            f"{output_file.stem}-bydate{output_file.suffix}"
+        )
+    else:
+        bydate_file = None
+
+    return AppOptions(
+        places_file, output_file, bydate_file, out_db, in_db, host_name
+    )
 
 
 def html_style():
@@ -131,9 +206,15 @@ def html_style():
         }
         .bookmark-path { color: gray; }
         .bookmark-title { color: black; }
-        #asof {
-            color: darkgray;
-            font-size: 12px;
+        .added-dt {
+            color: darkslateblue;
+            font-size: x-small;
+        }
+        .asof {
+            color: brown;
+            font-size: 18px;
+            font-weight: bold;
+            margin-top: 2rem;
         }
         #footer {
             border-top: 1px solid black;
@@ -181,6 +262,130 @@ def html_tail():
     ).format(run_dt.strftime("%Y-%m-%d %H:%M"), app_title)
 
 
+def limited(value):
+    s = str(value)
+    if len(s) <= 180:
+        return s
+    else:
+        return s[:177] + "..."
+
+
+def htm_txt(text: str) -> str:
+    s = text.replace("&", "&amp;")
+    s = s.replace("<", "&lt;")
+    s = s.replace(">", "&gt;")
+    return s
+
+
+def htm_url(url: str) -> str:
+    return url.replace("&", "%26")
+
+
+def write_bookmarks_html(file_name: str, bmks: List[Bookmark]):
+    print(f"Writing '{file_name}'")
+
+    #  https://docs.python.org/3/howto/sorting.html#sort-stability-and-complex-sorts
+    bmks.sort(key=lambda item: item.title.lower())
+    bmks.sort(key=lambda item: item.parent_path.lower())
+    bmks.sort(key=lambda item: item.host_name.lower())
+
+    with open(file_name, "w") as f:
+
+        f.write(html_head("Bookmarks"))
+
+        last_host = ""
+
+        for bmk in bmks:
+            assert bmk.host_name
+            assert bmk.asof_dt
+
+            if bmk.host_name != last_host:
+                f.write(
+                    f"<div class=\"asof\">On host '{bmk.host_name}' "
+                    f"as of {bmk.asof_dt}</div>\n"
+                )
+                last_host = bmk.host_name
+
+            title = limited(ascii(bmk.title))
+            s = dedent(
+                """
+                    <li>
+                        <p><span class="bookmark-path">{0}</span><br>
+                        <span class="bookmark-title">{1}</span><br>
+                        <a target="_blank" href=
+                        "{2}">
+                        {2}</a>
+                        <br><span class="added-dt">(added {3})</span></p>
+                    </li>
+                    """
+            ).format(
+                htm_txt(bmk.parent_path),
+                htm_txt(title),
+                htm_url(bmk.url),
+                bmk.when_added,
+            )
+            f.write(indent(s, " " * 8))
+        f.write(html_tail())
+
+
+def write_bookmarks_by_date_html(
+    file_name: str, n_hosts: int, bmks: List[Bookmark]
+):
+    print(f"Writing '{file_name}'")
+
+    #  Re-sort bookmarks list.
+    bmks.sort(key=lambda item: item.host_name.lower())
+    bmks.sort(key=lambda item: item.url)
+    bmks.sort(key=lambda item: item.when_added, reverse=True)
+
+    with open(file_name, "w") as f:
+
+        f.write(html_head("Bookmarks by Date Added"))
+
+        if 1 < n_hosts:
+            f.write('<div class="asof">\n')
+            f.write("Combined bookmarks from multiple hosts.\n</div>\n")
+        else:
+            if bmks:
+                f.write(
+                    f'<div class="asof">On host {bmks[0].host_name} '
+                    f"as of {bmks[0].asof_dt}</div>\n"
+                )
+
+        host_str = ""
+
+        for bmk in bmks:
+            assert bmk.host_name
+            assert bmk.asof_dt
+
+            if 1 < n_hosts:
+                host_str = f"&nbsp;&nbsp;&nbsp;({bmk.host_name})"
+
+            title = limited(ascii(bmk.title))
+            s = dedent(
+                """
+                    <li>
+                        <p>
+                        <span class="bydate">Added {3}{4}</span><br>
+                        <span class="bookmark-path">{0}</span><br>
+                        <span class="bookmark-title">{1}</span><br>
+                        <a target="_blank" href=
+                        "{2}">
+                        {2}</a>
+                        </p>
+                    </li>
+                    """
+            ).format(
+                htm_txt(bmk.parent_path),
+                htm_txt(title),
+                htm_url(bmk.url),
+                bmk.when_added,
+                host_str,
+            )
+            f.write(indent(s, " " * 8))
+        f.write(html_tail())
+
+
 def get_parent_path(con, id):
     cur = con.cursor()
 
@@ -194,11 +399,11 @@ def get_parent_path(con, id):
         depth += 1
         assert depth < 99
 
-        sql = (
+        qry = (
             "SELECT parent, title FROM moz_bookmarks WHERE id = {0}"
         ).format(parent_id)
 
-        cur.execute(sql)
+        cur.execute(qry)
         rows = cur.fetchall()
         assert len(rows) == 1
 
@@ -210,25 +415,46 @@ def get_parent_path(con, id):
     return parent_path
 
 
-def get_bookmarks(con):
+def from_moz_date(moz_date) -> str:
+    """
+    The date values in the Mozilla sqlite database are in microseconds
+    since the Unix epoch. This function converts the moz_date value to
+    seconds, then to the equivalent datetime value.
+    The date time value is returned as a formatted string.
+    """
+    dt_secs = moz_date / 1000000.0
+    dt = datetime.fromtimestamp(dt_secs)
+    return dt.strftime("%Y-%m-%d %H:%M:%S")
+
+
+def get_bookmarks(
+    con: sqlite3.Connection, host_name: str, asof: str
+) -> List[Bookmark]:
+    """
+    Queries the connected places.sqlite database and creates a
+    list of bookmarks as Bookmark (namedtuple) items.
+    The list is sorted by parent path and title.
+    """
     bookmarks = []
 
-    sql = dedent(
+    qry = dedent(
         """
         SELECT
-            a.title,
-            b.url,
-            a.parent
+            b.title,
+            p.url,
+            b.parent,
+            b.dateAdded
         FROM
-            moz_bookmarks a
-        JOIN moz_places b
-        ON b.id = a.fk
+            moz_bookmarks b
+        JOIN moz_places p
+        ON p.id = b.fk
         """
     )
+
     cur = con.cursor()
 
     try:
-        cur.execute(sql)
+        cur.execute(qry)
     except Exception as ex:
         if str(ex) == "database is locked":
             cur.close()
@@ -256,75 +482,249 @@ def get_bookmarks(con):
         if title is None:
             title = f"({url})"
 
-        bookmarks.append(Bookmark(title, url, get_parent_path(con, parent_id)))
+        when_added = from_moz_date(row[3])
 
-    bookmarks.sort(key=lambda item: item.parent_path + item.title)
+        bookmarks.append(
+            Bookmark(
+                title,
+                url,
+                get_parent_path(con, parent_id),
+                when_added,
+                host_name,
+                asof,
+            )
+        )
 
+    con.rollback()  # Should be no changes, but just in case...
+    cur.close()
     return bookmarks
 
 
-def limited(value):
-    s = str(value)
-    if len(s) <= 180:
-        return s
+def exec_sql(cur: sqlite3.Cursor, stmt: str, data=None):
+    try:
+        if data:
+            cur.execute(stmt, data)
+        else:
+            cur.execute(stmt)
+    except Exception as e:
+        print("\n{}\n".format(stmt))
+        raise e
+
+
+def get_bookmarks_from_db(
+    con: sqlite3.Connection,
+) -> Tuple[int, List[Bookmark]]:
+    bookmarks = []
+    cur = con.cursor()
+
+    exec_sql(cur, "SELECT count(id) FROM hosts;")
+    row = cur.fetchone()
+    if row:
+        n_hosts = int(row[0])
     else:
-        return s[:177] + "..."
+        assert 0, "Should be at least one host."
+        n_hosts = 1
 
+    qry = dedent(
+        """
+        SELECT title, url, parent_path, when_added,
+            host_name, created
+        FROM view_bookmarks
+        ORDER BY parent_path, title
+        """
+    )
 
-def htm_txt(text: str) -> str:
-    s = text.replace("&", "&amp;")
-    s = s.replace("<", "&lt;")
-    s = s.replace(">", "&gt;")
-    return s
+    exec_sql(cur, qry)
 
-
-def htm_url(url: str) -> str:
-    return url.replace("&", "%26")
-
-
-def write_bookmarks_html(opts: AppOptions, con: sqlite3.Connection):
-    file_name = str(opts.output_file)
-
-    bmks = get_bookmarks(con)
-
-    print(f"Writing '{file_name}'")
-    with open(file_name, "w") as f:
-
-        f.write(html_head("Bookmarks"))
-
-        dt = run_dt.strftime("%Y-%m-%d %H:%M")
-        hn = f"'{socket.gethostname()}'"
-        f.write(
-            f'<p><span id="asof">(on host {hn} as of {dt})</span></p>\n'
+    for row in cur.fetchall():
+        bookmarks.append(
+            Bookmark(row[0], row[1], row[2], row[3], row[4], row[5])
         )
 
-        for bmk in bmks:
-            title = limited(ascii(bmk.title))
-            s = dedent(
-                """
-                    <li>
-                        <p><span class="bookmark-path">{0}</span><br />
-                        <span class="bookmark-title">{1}</span><br />
-                        <a target="_blank" href=
-                        "{2}">
-                        {2}</a></p>
-                    </li>
-                    """
-            ).format(
-                htm_txt(bmk.parent_path), htm_txt(title), htm_url(bmk.url)
+    cur.close()
+    return (n_hosts, bookmarks)
+
+
+def db_object_exists(
+    con: sqlite3.Connection, obj_type: str, obj_name: str
+) -> bool:
+    cur = con.cursor()
+    qry = "SELECT name FROM sqlite_master WHERE type = ? AND name = ?;"
+    exec_sql(
+        cur,
+        qry,
+        (
+            obj_type,
+            obj_name,
+        ),
+    )
+    row = cur.fetchone()
+    cur.close()
+    return bool(row)
+
+
+def create_db_objects(con: sqlite3.Connection):
+
+    cur = con.cursor()
+
+    if db_object_exists(con, "table", "hosts"):
+        print("Table 'hosts' exists.")
+    else:
+        print("Creating table 'hosts'.")
+        stmt = dedent(
+            """
+            CREATE TABLE hosts (
+                id INTEGER PRIMARY KEY,
+                host_name TEXT UNIQUE,
+                source TEXT,
+                created TEXT,
+                app_name TEXT,
+                app_version TEXT
             )
-            f.write(indent(s, " " * 8))
-        f.write(html_tail())
+            """
+        )
+        exec_sql(cur, stmt)
+
+    if db_object_exists(con, "table", "bookmarks"):
+        print("Table 'bookmarks' exists.")
+    else:
+        print("Creating table 'bookmarks'.")
+        stmt = dedent(
+            """
+            CREATE TABLE bookmarks (
+                id INTEGER PRIMARY KEY,
+                host_id INTEGER,
+                title TEXT,
+                url TEXT,
+                parent_path TEXT,
+                when_added TEXT
+            )
+            """
+        )
+        exec_sql(cur, stmt)
+
+    if db_object_exists(con, "view", "view_bookmarks"):
+        print("View 'view_bookmarks' exists.")
+    else:
+        print("Creating view 'view_bookmarks'.")
+        stmt = dedent(
+            """
+            CREATE VIEW view_bookmarks AS
+                SELECT
+                    b.id,
+                    b.title,
+                    b.url,
+                    b.parent_path,
+                    b.when_added,
+                    b.host_id,
+                    h.host_name,
+                    h.created,
+                    h.source
+                FROM bookmarks b
+                JOIN hosts h
+                ON h.id = b.host_id;
+            """
+        )
+        exec_sql(cur, stmt)
+
+    con.commit()
+    cur.close()
+
+
+def insert_bookmarks(
+    con: sqlite3.Connection, opts: AppOptions, bookmarks: List[Bookmark]
+) -> bool:
+    cur = con.cursor()
+
+    assert opts.host_name
+
+    qry = "SELECT host_name FROM hosts WHERE host_name = ?;"
+    exec_sql(cur, qry, (opts.host_name,))
+    row = cur.fetchone()
+    if row:
+        print(
+            f"\nData for host '{opts.host_name}' is already in the database."
+        )
+        print("Duplicate data from same host is not allowed.\n")
+        return False
+
+    stmt = dedent(
+        """
+        INSERT INTO hosts (host_name, source, created, app_name, app_version)
+        VALUES (?, ?, ?, ?, ?);
+        """
+    )
+    data = (
+        opts.host_name,
+        str(opts.places_file),
+        run_dt.strftime("%Y-%m-%d %H:%M:%S"),
+        app_name,
+        app_version,
+    )
+    exec_sql(cur, stmt, data)
+    host_id = cur.lastrowid
+    con.commit()
+
+    for bmk in bookmarks:
+        stmt = dedent(
+            """
+            INSERT INTO bookmarks (
+                host_id, title, url, parent_path, when_added
+            )
+            VALUES (?, ?, ?, ?, ?);
+            """
+        )
+        data = (host_id, bmk.title, bmk.url, bmk.parent_path, bmk.when_added)
+        exec_sql(cur, stmt, data)
+
+    con.commit()
+    cur.close()
+    return True
 
 
 def main(argv):
+    print(f"\n{app_title}\n")
+
     opts = get_opts(argv)
-    print(f"Reading {opts.places_file}")
-    con = sqlite3.connect(opts.places_file, timeout=1.0)
-    write_bookmarks_html(opts, con)
-    con.close()
-    print("Done.")
-    return 0
+
+    ok = True
+
+    if opts.in_db:
+        print(f"Reading {opts.in_db}")
+        con = sqlite3.connect(str(opts.in_db))
+        n_hosts, bookmarks = get_bookmarks_from_db(con)
+        write_bookmarks_html(str(opts.output_file), bookmarks)
+        if opts.bydate_file:
+            write_bookmarks_by_date_html(
+                str(opts.bydate_file), n_hosts, bookmarks
+            )
+    else:
+        print(f"Reading {opts.places_file}")
+        con = sqlite3.connect(str(opts.places_file), timeout=1.0)
+        asof = run_dt.strftime("%Y-%m-%d %H:%M")
+        bookmarks = get_bookmarks(con, opts.host_name, asof)
+        con.close()
+        print("")
+
+        if opts.out_db:
+            print(f"Writing database '{opts.out_db}'")
+
+            db = sqlite3.connect(str(opts.out_db))
+            create_db_objects(db)
+
+            ok = insert_bookmarks(db, opts, bookmarks)
+            db.close()
+        else:
+            write_bookmarks_html(str(opts.output_file), bookmarks)
+            if opts.bydate_file:
+                write_bookmarks_by_date_html(
+                    str(opts.bydate_file), 1, bookmarks
+                )
+
+    if ok:
+        print("\nDone.\n")
+        return 0
+    return 1
 
 
 if __name__ == "__main__":

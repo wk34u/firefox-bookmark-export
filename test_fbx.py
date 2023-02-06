@@ -1,8 +1,27 @@
+import pytest
 import sqlite3
 
+from datetime import datetime, timedelta
 from pathlib import Path
 
-from fbx import get_opts
+from fbx import get_opts, from_moz_date, main
+
+
+def moz_date(days: int) -> int:
+    base_date: datetime = datetime(2023, 1, 2, 3, 4, 5)
+    d = base_date + timedelta(days=days)
+    #  Convert to milliseconds.
+    md = d.timestamp() * 1000000.0
+    return md
+
+
+def test_moz_date():
+    md = moz_date(0)
+    assert from_moz_date(md) == "2023-01-02 03:04:05"
+    md = moz_date(-1)
+    assert from_moz_date(md) == "2023-01-01 03:04:05"
+    md = moz_date(1)
+    assert from_moz_date(md) == "2023-01-03 03:04:05"
 
 
 def make_fake_places_file(file_path: Path):
@@ -10,10 +29,86 @@ def make_fake_places_file(file_path: Path):
 
     con = sqlite3.connect(str(file_path))
     cur = con.cursor()
-    cur.execute("CREATE TABLE moz_places (url TEXT);")
-    cur.execute("CREATE TABLE moz_bookmarks (title TEXT, parent TEXT);")
+
+    cur.execute("CREATE TABLE moz_places (id INTEGER, url TEXT);")
+
+    cur.execute(
+        "CREATE TABLE moz_bookmarks (id INTEGER, fk INTEGER, title TEXT, "
+        "parent INTEGER, dateAdded INTEGER);"
+    )
+
+    #  Insert places (URLs).
+    cur.execute(
+        "INSERT INTO moz_places VALUES (?, ?);", (1, "http://www.example.com/")
+    )
+
+    cur.execute(
+        "INSERT INTO moz_places VALUES (?, ?);",
+        (2, "http://www.example.com/page1"),
+    )
+
+    cur.execute(
+        "INSERT INTO moz_places VALUES (?, ?);",
+        (3, "http://www.example.com/page2"),
+    )
+    #  moz_places: id, url
+
+    #  Insert entries for menu and folders.
+    cur.execute(
+        "INSERT INTO moz_bookmarks VALUES (?, ?, ?, ?, ?);",
+        (1, None, "menu", 0, moz_date(0)),
+    )
+    cur.execute(
+        "INSERT INTO moz_bookmarks VALUES (?, ?, ?, ?, ?);",
+        (2, None, "folder-1", 1, moz_date(0)),
+    )
+    cur.execute(
+        "INSERT INTO moz_bookmarks VALUES (?, ?, ?, ?, ?);",
+        (3, None, "folder-2", 1, moz_date(0)),
+    )
+    cur.execute(
+        "INSERT INTO moz_bookmarks VALUES (?, ?, ?, ?, ?);",
+        (4, None, "folder-2a", 3, moz_date(0)),
+    )
+
+    #  Insert entries for bookmarked places.
+    cur.execute(
+        "INSERT INTO moz_bookmarks VALUES (?, ?, ?, ?, ?);",
+        (5, 1, "Example Home Page", 2, moz_date(0)),
+    )
+    cur.execute(
+        "INSERT INTO moz_bookmarks VALUES (?, ?, ?, ?, ?);",
+        (6, 2, "Example Page 1", 3, moz_date(4)),
+    )
+    cur.execute(
+        "INSERT INTO moz_bookmarks VALUES (?, ?, ?, ?, ?);",
+        (7, 3, "Example Page 2", 4, moz_date(2)),
+    )
+
+    #  moz_bookmarks: id, fk, title, parent, dateAdded
+
     con.commit()
     con.close()
+
+
+@pytest.fixture()
+def setup_tmp_source_and_output(tmp_path):
+    """
+    Creates a fake (well, it's a real sqlite db) places.sqlite to
+    simulate one created by Firefox, but with only the fields
+    queried by fbx.py.
+
+    Returns a tuple of (src_file, out_dir) where src_file is the
+    places.sqlite file and out_dir is the location where output
+    files should be written. Both are pathlib.Path objects.
+    """
+    src_dir = tmp_path / "profile"
+    src_dir.mkdir()
+    src_file = src_dir / "places.sqlite"
+    out_dir = tmp_path / "output"
+    out_dir.mkdir()
+    make_fake_places_file(src_file)
+    return (src_file, out_dir)
 
 
 def test_opt_default_profile():
@@ -66,9 +161,9 @@ def test_opt_places_file(tmp_path: Path):
 
     args = ["fbx.py", "--profile", str(p2.parent), "--places-file", str(p1)]
     opts = get_opts(args)
-    assert str(p1) == str(opts.places_file), (
-        "--places-file should override --profile"
-    )
+    assert str(p1) == str(
+        opts.places_file
+    ), "--places-file should override --profile"
 
 
 def test_opt_default_output():
@@ -83,15 +178,104 @@ def test_opt_output_name():
     args = ["fbx.py", "--output-name", "myname.txt"]
     opts = get_opts(args)
     print(f"\n{opts}")
-    assert opts.output_file.name == "myname.html", (
-        "File name suffix should always be '.html'."
-    )
+    assert (
+        opts.output_file.name == "myname.html"
+    ), "File name suffix should always be '.html'."
 
 
 def test_opt_output_folder(tmp_path):
     args = ["fbx.py", "--output-folder", str(tmp_path)]
     opts = get_opts(args)
     print(f"\n{opts}")
-    assert str(opts.output_file.parent) == str(tmp_path), (
-        "Output file should be in specified folder."
-    )
+    assert str(opts.output_file.parent) == str(
+        tmp_path
+    ), "Output file should be in specified folder."
+
+
+def test_html_output(setup_tmp_source_and_output, capsys):
+    src_file, out_dir = setup_tmp_source_and_output
+    args = [
+        "fbx.py",
+        "--places-file",
+        str(src_file),
+        "--output-folder",
+        str(out_dir),
+        "--output-name",
+        "test-fbx2-output.html",
+        "--by-date",
+    ]
+    result = main(args)
+    captured = capsys.readouterr()
+    assert result == 0
+    assert "Done." in captured.out
+
+
+def test_db_output(setup_tmp_source_and_output, capsys):
+    #  Maybe this test does too much, but it seems to make sense to chain
+    #  these operations instead of fiddling with a bunch of extra setup just
+    #  to make a test only test one thing. So says the impurist. :}~
+
+    src_file, out_dir = setup_tmp_source_and_output
+
+    #  Read a places.sqlite file and write to a sqlite database.
+    args = [
+        "fbx2.py",
+        "--places-file",
+        str(src_file),
+        "--output-folder",
+        str(out_dir),
+        "--output-sqlite=test-fbx2-db-output.sqlite",
+    ]
+    result = main(args)
+    captured = capsys.readouterr()
+    assert result == 0
+    assert "Done." in captured.out
+
+    #  Read the same places.sqlite file and write to the same sqlite database.
+    args = [
+        "fbx2.py",
+        "--places-file",
+        str(src_file),
+        "--output-folder",
+        str(out_dir),
+        "--output-sqlite=test-fbx2-db-output.sqlite",
+    ]
+    result = main(args)
+    captured = capsys.readouterr()
+    assert result == 1
+    assert " already in " in captured.out, "Should not load duplicate data."
+
+    #  Read the same places.sqlite file and write to the same sqlite database,
+    #  but say it's from a different host (--host-name parameter).
+    args = [
+        "fbx2.py",
+        "--places-file",
+        str(src_file),
+        "--output-folder",
+        str(out_dir),
+        "--output-sqlite=test-fbx2-db-output.sqlite",
+        "--host-name=other_host",
+    ]
+    result = main(args)
+    captured = capsys.readouterr()
+    assert result == 0
+    assert "Done." in captured.out
+
+    #  Read the sqlite database and write HTML files.
+    args = [
+        "fbx2.py",
+        "--output-folder",
+        str(out_dir),
+        f"--from-sqlite={out_dir}/test-fbx2-db-output.sqlite",
+        "--output-name",
+        "test-fbx2-output-from-db.html",
+        "--by-date",
+    ]
+    result = main(args)
+    captured = capsys.readouterr()
+    assert result == 0
+    assert "Done." in captured.out
+
+    html_path = out_dir / "test-fbx2-output-from-db.html"
+    assert html_path.exists()
+    assert "other_host" in html_path.read_text()
