@@ -11,12 +11,11 @@ from datetime import datetime
 from pathlib import Path
 from textwrap import dedent, indent
 from typing import List, Tuple
-# from rich import print
 
 
 app_name = "fbx.py"
 
-app_version = "230206.1"
+app_version = "230622.1"
 
 app_title = f"{app_name} (v.{app_version})"
 
@@ -24,7 +23,8 @@ run_dt = datetime.now()
 
 AppOptions = namedtuple(
     "AppOptions",
-    "places_file, output_file, bydate_file, out_db, in_db, host_name",
+    "places_file, output_file, bydate_file, md_file, md_bydate, out_db, "
+    "in_db, host_name",
 )
 
 Bookmark = namedtuple(
@@ -70,9 +70,19 @@ def get_args(argv):
         "--by-date",
         dest="do_bydate",
         action="store_true",
-        help="Also produce an output file listing bookmarks by date added "
+        help="Also produce an output file listing bookmarks by date-added "
         "(most recent first). The name of the output file will be the same "
         "as the main output file with '-bydate' added to the file name.",
+    )
+
+    ap.add_argument(
+        "--md",
+        dest="do_markdown",
+        action="store_true",
+        help="Also produce a Markdown file listing the bookmarks "
+        "The name of the output file will be the same as the HTML output "
+        "file with a '.md' suffix. If the --by-date switch is used, a "
+        "separate Markdown file by date (oldest first) is produced."
     )
 
     ap.add_argument(
@@ -185,8 +195,22 @@ def get_opts(argv):
     else:
         bydate_file = None
 
+    md_file = None
+    md_bydate = None
+    if args.do_markdown:
+        md_file = output_file.parent.joinpath(f"{output_file.stem}.md")
+        if bydate_file:
+            md_bydate = bydate_file.parent.joinpath(f"{bydate_file.stem}.md")
+
     return AppOptions(
-        places_file, output_file, bydate_file, out_db, in_db, host_name
+        places_file,
+        output_file,
+        bydate_file,
+        md_file,
+        md_bydate,
+        out_db,
+        in_db,
+        host_name,
     )
 
 
@@ -355,9 +379,6 @@ def write_bookmarks_by_date_html(
         host_str = ""
 
         for bmk in bmks:
-            assert bmk.host_name
-            assert bmk.asof_dt
-
             if 1 < n_hosts:
                 host_str = f"&nbsp;&nbsp;&nbsp;({bmk.host_name})"
 
@@ -384,6 +405,86 @@ def write_bookmarks_by_date_html(
             )
             f.write(indent(s, " " * 8))
         f.write(html_tail())
+
+
+def write_bookmarks_markdown(file_name: str, bmks: List[Bookmark]):
+    print(f"Writing '{file_name}'")
+
+    bmks.sort(key=lambda item: item.title.lower())
+    bmks.sort(key=lambda item: item.parent_path.lower())
+    bmks.sort(key=lambda item: item.host_name.lower())
+
+    with open(file_name, "w") as f:
+
+        f.write("# Bookmarks\n\n")
+
+        last_host = ""
+
+        for bmk in bmks:
+            if bmk.host_name != last_host:
+                f.write(
+                    f"On host **{bmk.host_name}** "
+                    f"as of **{bmk.asof_dt}**\n\n"
+                )
+                last_host = bmk.host_name
+
+            title = limited(ascii(bmk.title)).strip("'")
+
+            f.write(
+                f"[{htm_txt(title)}]({htm_url(bmk.url)})\n"
+                f"Added: `{bmk.when_added}`\n"
+                f"Folder: `{htm_txt(bmk.parent_path)}`\n\n"
+            )
+
+        f.write(
+            "---\n\nCreated {0} by {1}".format(
+                run_dt.strftime("%Y-%m-%d %H:%M"), app_title
+            )
+        )
+
+
+def write_bookmarks_markdown_by_date(
+    file_name: str, n_hosts: int, bmks: List[Bookmark]
+):
+    print(f"Writing '{file_name}'")
+
+    #  Re-sort bookmarks list. Ascending when_added for Markdown output.
+    bmks.sort(key=lambda item: item.host_name.lower())
+    bmks.sort(key=lambda item: item.url)
+    bmks.sort(key=lambda item: item.when_added)
+
+    with open(file_name, "w") as f:
+
+        f.write("# Bookmarks by Date Added\n\n")
+
+        if 1 < n_hosts:
+            f.write("(Combined bookmarks from multiple hosts.)\n\n")
+        else:
+            if bmks:
+                f.write(
+                    f"On host **{bmks[0].host_name}** as of "
+                    f"**{bmks[0].asof_dt}**.\n\n"
+                )
+
+        host_str = ""
+
+        for bmk in bmks:
+            if 1 < n_hosts:
+                host_str = f"Host: `{bmk.host_name}`\n"
+
+            title = limited(ascii(bmk.title)).strip("'")
+
+            f.write(
+                f"[{htm_txt(title)}]({htm_url(bmk.url)})\n"
+                f"Added: `{bmk.when_added}`\n"
+                f"Folder: `{htm_txt(bmk.parent_path)}`\n{host_str}\n"
+            )
+
+        f.write(
+            "---\n\nCreated {0} by {1}".format(
+                run_dt.strftime("%Y-%m-%d %H:%M"), app_title
+            )
+        )
 
 
 def get_parent_path(con, id):
@@ -694,9 +795,15 @@ def main(argv):
         con = sqlite3.connect(str(opts.in_db))
         n_hosts, bookmarks = get_bookmarks_from_db(con)
         write_bookmarks_html(str(opts.output_file), bookmarks)
+        if opts.md_file:
+            write_bookmarks_markdown(str(opts.md_file), bookmarks)
         if opts.bydate_file:
             write_bookmarks_by_date_html(
                 str(opts.bydate_file), n_hosts, bookmarks
+            )
+        if opts.md_bydate:
+            write_bookmarks_markdown_by_date(
+                str(opts.md_bydate), n_hosts, bookmarks
             )
     else:
         print(f"Reading {opts.places_file}")
@@ -716,9 +823,15 @@ def main(argv):
             db.close()
         else:
             write_bookmarks_html(str(opts.output_file), bookmarks)
+            if opts.md_file:
+                write_bookmarks_markdown(str(opts.md_file), bookmarks)
             if opts.bydate_file:
                 write_bookmarks_by_date_html(
                     str(opts.bydate_file), 1, bookmarks
+                )
+            if opts.md_bydate:
+                write_bookmarks_markdown_by_date(
+                    str(opts.md_bydate), 1, bookmarks
                 )
 
     if ok:

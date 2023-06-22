@@ -183,6 +183,14 @@ def test_opt_output_name():
     ), "File name suffix should always be '.html'."
 
 
+def test_opt_md_output_names():
+    args = ["fbx.py", "--output-name", "myname.txt", "--by-date", "--md"]
+    opts = get_opts(args)
+    print(f"\n{opts}")
+    assert opts.md_file.name == "myname.md"
+    assert opts.md_bydate.name == "myname-bydate.md"
+
+
 def test_opt_output_folder(tmp_path):
     args = ["fbx.py", "--output-folder", str(tmp_path)]
     opts = get_opts(args)
@@ -208,6 +216,27 @@ def test_html_output(setup_tmp_source_and_output, capsys):
     captured = capsys.readouterr()
     assert result == 0
     assert "Done." in captured.out
+
+
+def test_markdown_output(setup_tmp_source_and_output, capsys):
+    src_file, out_dir = setup_tmp_source_and_output
+    out_name = "test-fbx-output.md"
+    out_md = out_dir / out_name
+    args = [
+        "fbx.py",
+        "--places-file",
+        str(src_file),
+        "--output-folder",
+        str(out_dir),
+        "--output-name",
+        out_name,
+        "--md",
+    ]
+    result = main(args)
+    captured = capsys.readouterr()
+    assert result == 0
+    assert "Done." in captured.out
+    assert out_md.exists()
 
 
 def test_db_output(setup_tmp_source_and_output, capsys):

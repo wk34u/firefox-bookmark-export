@@ -12,8 +12,8 @@ There are additional options for writing to a SQLite database file instead of cr
 ```
 usage: fbx.py [-h] [--profile PROFILE] [--places-file PLACES_FILE]
               [--output-name OUTPUT_FILE] [--output-folder OUTPUT_FOLDER]
-              [--by-date] [--output-sqlite OUTPUT_DB] [--host-name HOST_NAME]
-              [--from-sqlite SOURCE_DB]
+              [--by-date] [--md] [--output-sqlite OUTPUT_DB]
+              [--host-name HOST_NAME] [--from-sqlite SOURCE_DB]
 
 Exports Firefox bookmarks to a single HTML file.
 
@@ -28,10 +28,15 @@ optional arguments:
   --output-folder OUTPUT_FOLDER
                         Name of the folder in which to create the output HTML
                         file.
-  --by-date             Also produce an output file listing bookmarks by date
+  --by-date             Also produce an output file listing bookmarks by date-
                         added (most recent first). The name of the output file
                         will be the same as the main output file with
                         '-bydate' added to the file name.
+  --md                  Also produce a Markdown file listing the bookmarks The
+                        name of the output file will be the same as the HTML
+                        output file with a '.md' suffix. If the --by-date
+                        switch is used, a separate Markdown file by date
+                        (oldest first) is produced.
   --output-sqlite OUTPUT_DB
                         Name of the SQLite database file to produce instead of
                         HTML files. This overrides the --output-name and --by-
