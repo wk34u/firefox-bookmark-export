@@ -15,7 +15,7 @@ from typing import List, Tuple
 
 app_name = "fbx.py"
 
-app_version = "230622.1"
+app_version = "230926.1"
 
 app_title = f"{app_name} (v.{app_version})"
 
@@ -232,7 +232,7 @@ def html_style():
         .bookmark-title { color: black; }
         .added-dt {
             color: darkslateblue;
-            font-size: x-small;
+            font-size: 12px;
         }
         .asof {
             color: brown;
@@ -262,6 +262,7 @@ def html_head(title):
             <style>
         {2}
             </style>
+            <base target="_blank">
         </head>
         <body>
         <h1>{1}</h1>
@@ -334,12 +335,12 @@ def write_bookmarks_html(file_name: str, bmks: List[Bookmark]):
             s = dedent(
                 """
                     <li>
-                        <p><span class="bookmark-path">{0}</span><br>
-                        <span class="bookmark-title">{1}</span><br>
-                        <a target="_blank" href=
-                        "{2}">
-                        {2}</a>
-                        <br><span class="added-dt">(added {3})</span></p>
+                        <p>
+                        <span class="bookmark-title">{1}</span><br />
+                        <span class="bookmark-path">{0}</span><br />
+                        <a href="{2}">{2}</a><br />
+                        <span class="added-dt">Added {3}</span>
+                        </p>
                     </li>
                     """
             ).format(
@@ -387,12 +388,10 @@ def write_bookmarks_by_date_html(
                 """
                     <li>
                         <p>
-                        <span class="bydate">Added {3}{4}</span><br>
-                        <span class="bookmark-path">{0}</span><br>
-                        <span class="bookmark-title">{1}</span><br>
-                        <a target="_blank" href=
-                        "{2}">
-                        {2}</a>
+                        <span class="bookmark-title">{1}</span><br />
+                        <span class="bookmark-path">{0}</span><br />
+                        <a href="{2}">{2}</a><br />
+                        <span class="added-dt">Added {3}{4}</span>
                         </p>
                     </li>
                     """
