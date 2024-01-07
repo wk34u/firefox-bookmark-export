@@ -1,18 +1,17 @@
-import pytest
 import sqlite3
-
 from datetime import datetime, timedelta
 from pathlib import Path
 
-from fbx import get_opts, from_moz_date, main
+import pytest
+
+from fbx import from_moz_date, get_opts, main
 
 
 def moz_date(days: int) -> int:
     base_date: datetime = datetime(2023, 1, 2, 3, 4, 5)
     d = base_date + timedelta(days=days)
     #  Convert to milliseconds.
-    md = d.timestamp() * 1000000.0
-    return md
+    return d.timestamp() * 1000000.0
 
 
 def test_moz_date():

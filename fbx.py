@@ -1,35 +1,43 @@
 #!/usr/bin/env python3
 
+from __future__ import annotations
+
 import argparse
 import os
 import socket
 import sqlite3
 import sys
-
-from collections import namedtuple
 from datetime import datetime
 from pathlib import Path
 from textwrap import dedent, indent
-from typing import List, Tuple
-
+from typing import NamedTuple
 
 app_name = "fbx.py"
 
-app_version = "230926.1"
+app_version = "2024.01.1"
 
-app_title = f"{app_name} (v.{app_version})"
+app_title = f"{app_name} (v{app_version})"
 
 run_dt = datetime.now()
 
-AppOptions = namedtuple(
-    "AppOptions",
-    "places_file, output_file, bydate_file, md_file, md_bydate, out_db, "
-    "in_db, host_name",
-)
+class AppOptions(NamedTuple):
+    places_file: Path
+    output_file: Path
+    bydate_file: Path
+    md_file: Path
+    md_bydate: Path
+    out_db: Path
+    in_db: Path
+    host_name: str
 
-Bookmark = namedtuple(
-    "Bookmark", "title, url, parent_path, when_added, host_name, asof_dt"
-)
+
+class Bookmark(NamedTuple):
+    title: str
+    url: str
+    parent_path: str
+    when_added: str
+    host_name: str
+    asof_dt: str
 
 
 def get_args(argv):
@@ -118,7 +126,7 @@ def get_args(argv):
     return ap.parse_args(argv[1:])
 
 
-def get_opts(argv):
+def get_opts(argv):  # noqa: PLR0912, PLR0915
     args = get_args(argv)
 
     places_file = None
@@ -172,10 +180,7 @@ def get_opts(argv):
     else:
         in_db = None
 
-    if args.host_name:
-        host_name = args.host_name
-    else:
-        host_name = socket.gethostname()
+    host_name = args.host_name if args.host_name else socket.gethostname()
 
     if args.output_file:
         out_file = Path(args.output_file)
@@ -288,25 +293,24 @@ def html_tail():
 
 
 def limited(value):
+    length_limit = 180
     s = str(value)
-    if len(s) <= 180:
+    if len(s) <= length_limit:
         return s
-    else:
-        return s[:177] + "..."
+    return s[:177] + "..."
 
 
 def htm_txt(text: str) -> str:
     s = text.replace("&", "&amp;")
     s = s.replace("<", "&lt;")
-    s = s.replace(">", "&gt;")
-    return s
+    return s.replace(">", "&gt;")
 
 
 def htm_url(url: str) -> str:
     return url.replace("&", "%26")
 
 
-def write_bookmarks_html(file_name: str, bmks: List[Bookmark]):
+def write_bookmarks_html(file_name: str, bmks: list[Bookmark]):
     print(f"Writing '{file_name}'")
 
     #  https://docs.python.org/3/howto/sorting.html#sort-stability-and-complex-sorts
@@ -314,15 +318,15 @@ def write_bookmarks_html(file_name: str, bmks: List[Bookmark]):
     bmks.sort(key=lambda item: item.parent_path.lower())
     bmks.sort(key=lambda item: item.host_name.lower())
 
-    with open(file_name, "w") as f:
+    with Path(file_name).open("w") as f:
 
         f.write(html_head("Bookmarks"))
 
         last_host = ""
 
         for bmk in bmks:
-            assert bmk.host_name
-            assert bmk.asof_dt
+            assert bmk.host_name  # noqa: S101
+            assert bmk.asof_dt  # noqa: S101
 
             if bmk.host_name != last_host:
                 f.write(
@@ -354,7 +358,7 @@ def write_bookmarks_html(file_name: str, bmks: List[Bookmark]):
 
 
 def write_bookmarks_by_date_html(
-    file_name: str, n_hosts: int, bmks: List[Bookmark]
+    file_name: str, n_hosts: int, bmks: list[Bookmark]
 ):
     print(f"Writing '{file_name}'")
 
@@ -363,24 +367,23 @@ def write_bookmarks_by_date_html(
     bmks.sort(key=lambda item: item.url)
     bmks.sort(key=lambda item: item.when_added, reverse=True)
 
-    with open(file_name, "w") as f:
+    with Path(file_name).open("w") as f:
 
         f.write(html_head("Bookmarks by Date Added"))
 
-        if 1 < n_hosts:
+        if n_hosts > 1:
             f.write('<div class="asof">\n')
             f.write("Combined bookmarks from multiple hosts.\n</div>\n")
-        else:
-            if bmks:
-                f.write(
-                    f'<div class="asof">On host {bmks[0].host_name} '
-                    f"as of {bmks[0].asof_dt}</div>\n"
-                )
+        elif bmks:
+            f.write(
+                f'<div class="asof">On host {bmks[0].host_name} '
+                f"as of {bmks[0].asof_dt}</div>\n"
+            )
 
         host_str = ""
 
         for bmk in bmks:
-            if 1 < n_hosts:
+            if n_hosts > 1:
                 host_str = f"&nbsp;&nbsp;&nbsp;({bmk.host_name})"
 
             title = limited(ascii(bmk.title))
@@ -406,14 +409,14 @@ def write_bookmarks_by_date_html(
         f.write(html_tail())
 
 
-def write_bookmarks_markdown(file_name: str, bmks: List[Bookmark]):
+def write_bookmarks_markdown(file_name: str, bmks: list[Bookmark]):
     print(f"Writing '{file_name}'")
 
     bmks.sort(key=lambda item: item.title.lower())
     bmks.sort(key=lambda item: item.parent_path.lower())
     bmks.sort(key=lambda item: item.host_name.lower())
 
-    with open(file_name, "w") as f:
+    with Path(file_name).open("w") as f:
 
         f.write("# Bookmarks\n\n")
 
@@ -443,7 +446,7 @@ def write_bookmarks_markdown(file_name: str, bmks: List[Bookmark]):
 
 
 def write_bookmarks_markdown_by_date(
-    file_name: str, n_hosts: int, bmks: List[Bookmark]
+    file_name: str, n_hosts: int, bmks: list[Bookmark]
 ):
     print(f"Writing '{file_name}'")
 
@@ -452,23 +455,22 @@ def write_bookmarks_markdown_by_date(
     bmks.sort(key=lambda item: item.url)
     bmks.sort(key=lambda item: item.when_added)
 
-    with open(file_name, "w") as f:
+    with Path(file_name).open("w") as f:
 
         f.write("# Bookmarks by Date Added\n\n")
 
-        if 1 < n_hosts:
+        if n_hosts > 1:
             f.write("(Combined bookmarks from multiple hosts.)\n\n")
-        else:
-            if bmks:
-                f.write(
-                    f"On host **{bmks[0].host_name}** as of "
-                    f"**{bmks[0].asof_dt}**.\n\n"
-                )
+        elif bmks:
+            f.write(
+                f"On host **{bmks[0].host_name}** as of "
+                f"**{bmks[0].asof_dt}**.\n\n"
+            )
 
         host_str = ""
 
         for bmk in bmks:
-            if 1 < n_hosts:
+            if n_hosts > 1:
                 host_str = f"Host: `{bmk.host_name}`\n"
 
             title = limited(ascii(bmk.title)).strip("'")
@@ -486,29 +488,31 @@ def write_bookmarks_markdown_by_date(
         )
 
 
-def get_parent_path(con, id):
+def get_parent_path(con, bookmark_parent_id):
     cur = con.cursor()
-
+    max_depth = 99
     depth = 0
-    parent_id = id
+    parent_id = bookmark_parent_id
     parent_path = "/"
-    while 0 < parent_id:
+    while parent_id > 0:
         #  It appears that the root always has id=0. If that is not the case
         #  this max-depth check (99 seems like a good arbitrary value) will
         #  prevent an infinate loop.
         depth += 1
-        assert depth < 99
+        if depth > max_depth:
+            print("ERROR: parent_path max depth exceeded.")
+            return f"/(ERROR){parent_path}"
 
-        qry = (
+        qry = (  # noqa: S608
             "SELECT parent, title FROM moz_bookmarks WHERE id = {0}"
         ).format(parent_id)
 
         cur.execute(qry)
         rows = cur.fetchall()
-        assert len(rows) == 1
+        assert len(rows) == 1  # noqa: S101
 
         parent_id = int(rows[0][0])
-        if 0 < parent_id:
+        if parent_id > 0:
             title = str(rows[0][1])
             parent_path = f"/{title}{parent_path}"
 
@@ -529,7 +533,7 @@ def from_moz_date(moz_date) -> str:
 
 def get_bookmarks(
     con: sqlite3.Connection, host_name: str, asof: str
-) -> List[Bookmark]:
+) -> list[Bookmark]:
     """
     Queries the connected places.sqlite database and creates a
     list of bookmarks as Bookmark (namedtuple) items.
@@ -613,8 +617,8 @@ def exec_sql(cur: sqlite3.Cursor, stmt: str, data=None):
 
 def get_bookmarks_from_db(
     con: sqlite3.Connection,
-) -> Tuple[int, List[Bookmark]]:
-    bookmarks = []
+) -> tuple[int, list[Bookmark]]:
+    # bookmarks = []
     cur = con.cursor()
 
     exec_sql(cur, "SELECT count(id) FROM hosts;")
@@ -622,7 +626,7 @@ def get_bookmarks_from_db(
     if row:
         n_hosts = int(row[0])
     else:
-        assert 0, "Should be at least one host."
+        assert 0, "Should be at least one host."  # noqa: S101
         n_hosts = 1
 
     qry = dedent(
@@ -636,10 +640,10 @@ def get_bookmarks_from_db(
 
     exec_sql(cur, qry)
 
-    for row in cur.fetchall():
-        bookmarks.append(
-            Bookmark(row[0], row[1], row[2], row[3], row[4], row[5])
-        )
+    bookmarks = [
+        Bookmark(row[0], row[1], row[2], row[3], row[4], row[5])
+        for row in cur.fetchall()
+    ]
 
     cur.close()
     return (n_hosts, bookmarks)
@@ -732,11 +736,11 @@ def create_db_objects(con: sqlite3.Connection):
 
 
 def insert_bookmarks(
-    con: sqlite3.Connection, opts: AppOptions, bookmarks: List[Bookmark]
+    con: sqlite3.Connection, opts: AppOptions, bookmarks: list[Bookmark]
 ) -> bool:
     cur = con.cursor()
 
-    assert opts.host_name
+    assert opts.host_name  # noqa: S101
 
     qry = "SELECT host_name FROM hosts WHERE host_name = ?;"
     exec_sql(cur, qry, (opts.host_name,))
