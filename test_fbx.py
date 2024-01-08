@@ -37,9 +37,7 @@ def make_fake_places_file(file_path: Path):
     )
 
     #  Insert places (URLs).
-    cur.execute(
-        "INSERT INTO moz_places VALUES (?, ?);", (1, "http://www.example.com/")
-    )
+    cur.execute("INSERT INTO moz_places VALUES (?, ?);", (1, "http://www.example.com/"))
 
     cur.execute(
         "INSERT INTO moz_places VALUES (?, ?);",
@@ -160,9 +158,7 @@ def test_opt_places_file(tmp_path: Path):
 
     args = ["fbx.py", "--profile", str(p2.parent), "--places-file", str(p1)]
     opts = get_opts(args)
-    assert str(p1) == str(
-        opts.places_file
-    ), "--places-file should override --profile"
+    assert str(p1) == str(opts.places_file), "--places-file should override --profile"
 
 
 def test_opt_default_output():

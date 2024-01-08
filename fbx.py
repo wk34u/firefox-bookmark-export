@@ -14,11 +14,12 @@ from typing import NamedTuple
 
 app_name = "fbx.py"
 
-app_version = "2024.01.1"
+app_version = "2024.01.2"
 
 app_title = f"{app_name} (v{app_version})"
 
 run_dt = datetime.now()
+
 
 class AppOptions(NamedTuple):
     places_file: Path
@@ -90,7 +91,7 @@ def get_args(argv):
         help="Also produce a Markdown file listing the bookmarks "
         "The name of the output file will be the same as the HTML output "
         "file with a '.md' suffix. If the --by-date switch is used, a "
-        "separate Markdown file by date (oldest first) is produced."
+        "separate Markdown file by date (oldest first) is produced.",
     )
 
     ap.add_argument(
@@ -187,8 +188,7 @@ def get_opts(argv):  # noqa: PLR0912, PLR0915
         out_file = Path(out_file.stem).with_suffix(".html")
     else:
         out_file = Path(
-            f"Firefox-bookmarks-{host_name}-"
-            f"{run_dt.strftime('%y%m%d_%H%M')}.html"
+            f"Firefox-bookmarks-{host_name}-" f"{run_dt.strftime('%y%m%d_%H%M')}.html"
         )
 
     output_file = out_dir.joinpath(out_file.name)
@@ -319,7 +319,6 @@ def write_bookmarks_html(file_name: str, bmks: list[Bookmark]):
     bmks.sort(key=lambda item: item.host_name.lower())
 
     with Path(file_name).open("w") as f:
-
         f.write(html_head("Bookmarks"))
 
         last_host = ""
@@ -357,9 +356,7 @@ def write_bookmarks_html(file_name: str, bmks: list[Bookmark]):
         f.write(html_tail())
 
 
-def write_bookmarks_by_date_html(
-    file_name: str, n_hosts: int, bmks: list[Bookmark]
-):
+def write_bookmarks_by_date_html(file_name: str, n_hosts: int, bmks: list[Bookmark]):
     print(f"Writing '{file_name}'")
 
     #  Re-sort bookmarks list.
@@ -368,7 +365,6 @@ def write_bookmarks_by_date_html(
     bmks.sort(key=lambda item: item.when_added, reverse=True)
 
     with Path(file_name).open("w") as f:
-
         f.write(html_head("Bookmarks by Date Added"))
 
         if n_hosts > 1:
@@ -417,17 +413,13 @@ def write_bookmarks_markdown(file_name: str, bmks: list[Bookmark]):
     bmks.sort(key=lambda item: item.host_name.lower())
 
     with Path(file_name).open("w") as f:
-
         f.write("# Bookmarks\n\n")
 
         last_host = ""
 
         for bmk in bmks:
             if bmk.host_name != last_host:
-                f.write(
-                    f"On host **{bmk.host_name}** "
-                    f"as of **{bmk.asof_dt}**\n\n"
-                )
+                f.write(f"On host **{bmk.host_name}** " f"as of **{bmk.asof_dt}**\n\n")
                 last_host = bmk.host_name
 
             title = limited(ascii(bmk.title)).strip("'")
@@ -456,15 +448,13 @@ def write_bookmarks_markdown_by_date(
     bmks.sort(key=lambda item: item.when_added)
 
     with Path(file_name).open("w") as f:
-
         f.write("# Bookmarks by Date Added\n\n")
 
         if n_hosts > 1:
             f.write("(Combined bookmarks from multiple hosts.)\n\n")
         elif bmks:
             f.write(
-                f"On host **{bmks[0].host_name}** as of "
-                f"**{bmks[0].asof_dt}**.\n\n"
+                f"On host **{bmks[0].host_name}** as of " f"**{bmks[0].asof_dt}**.\n\n"
             )
 
         host_str = ""
@@ -531,9 +521,7 @@ def from_moz_date(moz_date) -> str:
     return dt.strftime("%Y-%m-%d %H:%M:%S")
 
 
-def get_bookmarks(
-    con: sqlite3.Connection, host_name: str, asof: str
-) -> list[Bookmark]:
+def get_bookmarks(con: sqlite3.Connection, host_name: str, asof: str) -> list[Bookmark]:
     """
     Queries the connected places.sqlite database and creates a
     list of bookmarks as Bookmark (namedtuple) items.
@@ -564,8 +552,7 @@ def get_bookmarks(
             cur.close()
             con.close()
             sys.stderr.write(
-                "\nERROR: Database is locked. "
-                "Please close Firefox and try again.\n"
+                "\nERROR: Database is locked. " "Please close Firefox and try again.\n"
             )
             sys.exit(1)
         else:
@@ -649,9 +636,7 @@ def get_bookmarks_from_db(
     return (n_hosts, bookmarks)
 
 
-def db_object_exists(
-    con: sqlite3.Connection, obj_type: str, obj_name: str
-) -> bool:
+def db_object_exists(con: sqlite3.Connection, obj_type: str, obj_name: str) -> bool:
     cur = con.cursor()
     qry = "SELECT name FROM sqlite_master WHERE type = ? AND name = ?;"
     exec_sql(
@@ -668,7 +653,6 @@ def db_object_exists(
 
 
 def create_db_objects(con: sqlite3.Connection):
-
     cur = con.cursor()
 
     if db_object_exists(con, "table", "hosts"):
@@ -746,9 +730,7 @@ def insert_bookmarks(
     exec_sql(cur, qry, (opts.host_name,))
     row = cur.fetchone()
     if row:
-        print(
-            f"\nData for host '{opts.host_name}' is already in the database."
-        )
+        print(f"\nData for host '{opts.host_name}' is already in the database.")
         print("Duplicate data from same host is not allowed.\n")
         return False
 
@@ -801,13 +783,9 @@ def main(argv):
         if opts.md_file:
             write_bookmarks_markdown(str(opts.md_file), bookmarks)
         if opts.bydate_file:
-            write_bookmarks_by_date_html(
-                str(opts.bydate_file), n_hosts, bookmarks
-            )
+            write_bookmarks_by_date_html(str(opts.bydate_file), n_hosts, bookmarks)
         if opts.md_bydate:
-            write_bookmarks_markdown_by_date(
-                str(opts.md_bydate), n_hosts, bookmarks
-            )
+            write_bookmarks_markdown_by_date(str(opts.md_bydate), n_hosts, bookmarks)
     else:
         print(f"Reading {opts.places_file}")
         con = sqlite3.connect(str(opts.places_file), timeout=1.0)
@@ -829,13 +807,9 @@ def main(argv):
             if opts.md_file:
                 write_bookmarks_markdown(str(opts.md_file), bookmarks)
             if opts.bydate_file:
-                write_bookmarks_by_date_html(
-                    str(opts.bydate_file), 1, bookmarks
-                )
+                write_bookmarks_by_date_html(str(opts.bydate_file), 1, bookmarks)
             if opts.md_bydate:
-                write_bookmarks_markdown_by_date(
-                    str(opts.md_bydate), 1, bookmarks
-                )
+                write_bookmarks_markdown_by_date(str(opts.md_bydate), 1, bookmarks)
 
     if ok:
         print("\nDone.\n")
