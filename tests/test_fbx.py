@@ -307,7 +307,6 @@ def test_use_places_file_timestamp(setup_tmp_source_and_output, capsys):
 
     # Set a specific timestamp on the test places.sqlite file.
     dt = datetime(2023, 1, 2, 3, 4, 5)
-    dt_str = dt.strftime("%Y-%m-%d %H:%M")
     ts = dt.timestamp()
     os.utime(src_file, (ts, ts))
 
@@ -316,17 +315,20 @@ def test_use_places_file_timestamp(setup_tmp_source_and_output, capsys):
         str(src_file),
         "--output-folder",
         str(out_dir),
-        "--output-name",
-        "test-fbx-output.html",
         "--asof-mtime",
     ]
     result = main(args)
+
     captured = capsys.readouterr()
+
     assert result == 0
     assert "Done." in captured.out
+
     files = list(out_dir.glob("*.html"))
     assert len(files) == 1
     out_file = files[0]
-    # Should get 'as of' date-time from places.file timestamp
-    # when --asof-mtime option is used.
-    assert f" as of {dt_str}" in out_file.read_text()
+
+    # Should get 'as of' date-time from the places.file last modified
+    # timestamp when the '--asof-mtime' option is used.
+    assert f"{dt.strftime('%y%m%d_%H%M')}" in out_file.name
+    assert f" as of {dt.strftime('%Y-%m-%d %H:%M')}" in out_file.read_text()

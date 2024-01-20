@@ -14,7 +14,7 @@ from typing import NamedTuple
 
 app_name = "fbx.py"
 
-__version__ = "2024.01.4"
+__version__ = "2024.01.5"
 
 app_title = f"{app_name} (v{__version__})"
 
@@ -196,9 +196,8 @@ def get_opts(arglist=None):  # noqa: PLR0912, PLR0915
         out_file = Path(args.output_file)
         out_file = Path(out_file.stem).with_suffix(".html")
     else:
-        out_file = Path(
-            f"Firefox-bookmarks-{host_name}-{run_dt.strftime('%y%m%d_%H%M')}.html"
-        )
+        dt_tag = get_asof_date(args.use_mtime, places_file).strftime("%y%m%d_%H%M")
+        out_file = Path(f"Firefox-bookmarks-{host_name}-{dt_tag}.html")
 
     output_file = out_dir.joinpath(out_file.name)
 
@@ -776,9 +775,9 @@ def insert_bookmarks(
     return True
 
 
-def get_asof_date(opts: AppOptions) -> datetime:
-    if opts.use_mtime:
-        return datetime.fromtimestamp(opts.places_file.stat().st_mtime)
+def get_asof_date(use_mtime: bool, places_file: Path) -> datetime:
+    if use_mtime and places_file:
+        return datetime.fromtimestamp(places_file.stat().st_mtime)
     return run_dt
 
 
@@ -803,7 +802,9 @@ def main(arglist=None):
     else:
         print(f"Reading {opts.places_file}")
         con = sqlite3.connect(str(opts.places_file), timeout=1.0)
-        asof = get_asof_date(opts).strftime("%Y-%m-%d %H:%M")
+        asof = get_asof_date(opts.use_mtime, opts.places_file).strftime(
+            "%Y-%m-%d %H:%M"
+        )
         bookmarks = get_bookmarks(con, opts.host_name, asof)
         con.close()
         print("")
