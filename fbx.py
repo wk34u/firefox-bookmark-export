@@ -188,7 +188,7 @@ def get_opts(argv):  # noqa: PLR0912, PLR0915
         out_file = Path(out_file.stem).with_suffix(".html")
     else:
         out_file = Path(
-            f"Firefox-bookmarks-{host_name}-" f"{run_dt.strftime('%y%m%d_%H%M')}.html"
+            f"Firefox-bookmarks-{host_name}-{run_dt.strftime('%y%m%d_%H%M')}.html"
         )
 
     output_file = out_dir.joinpath(out_file.name)
@@ -419,7 +419,7 @@ def write_bookmarks_markdown(file_name: str, bmks: list[Bookmark]):
 
         for bmk in bmks:
             if bmk.host_name != last_host:
-                f.write(f"On host **{bmk.host_name}** " f"as of **{bmk.asof_dt}**\n\n")
+                f.write(f"On host **{bmk.host_name}** as of **{bmk.asof_dt}**\n\n")
                 last_host = bmk.host_name
 
             title = limited(ascii(bmk.title)).strip("'")
@@ -454,7 +454,7 @@ def write_bookmarks_markdown_by_date(
             f.write("(Combined bookmarks from multiple hosts.)\n\n")
         elif bmks:
             f.write(
-                f"On host **{bmks[0].host_name}** as of " f"**{bmks[0].asof_dt}**.\n\n"
+                f"On host **{bmks[0].host_name}** as of **{bmks[0].asof_dt}**.\n\n"
             )
 
         host_str = ""
@@ -552,7 +552,7 @@ def get_bookmarks(con: sqlite3.Connection, host_name: str, asof: str) -> list[Bo
             cur.close()
             con.close()
             sys.stderr.write(
-                "\nERROR: Database is locked. " "Please close Firefox and try again.\n"
+                "\nERROR: Database is locked. Please close Firefox and try again.\n"
             )
             sys.exit(1)
         else:
