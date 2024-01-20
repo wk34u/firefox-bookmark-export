@@ -14,7 +14,7 @@ from typing import NamedTuple
 
 app_name = "fbx.py"
 
-__version__ = "2024.01.3"
+__version__ = "2024.01.4"
 
 app_title = f"{app_name} (v{__version__})"
 
@@ -30,6 +30,7 @@ class AppOptions(NamedTuple):
     out_db: Path
     in_db: Path
     host_name: str
+    use_mtime: bool
 
 
 class Bookmark(NamedTuple):
@@ -59,6 +60,14 @@ def get_args(arglist=None):
         action="store",
         help="Path to a specific version of the 'places.sqlite' file. "
         "Overrides the '--profile' options.",
+    )
+
+    ap.add_argument(
+        "--asof-mtime",
+        dest="use_mtime",
+        action="store_true",
+        help="Use the modified time of the 'places.sqlite' file for the 'as of' "
+        "date-time listed in the output files.",
     )
 
     ap.add_argument(
@@ -216,6 +225,7 @@ def get_opts(arglist=None):  # noqa: PLR0912, PLR0915
         out_db,
         in_db,
         host_name,
+        args.use_mtime,
     )
 
 
@@ -766,6 +776,12 @@ def insert_bookmarks(
     return True
 
 
+def get_asof_date(opts: AppOptions) -> datetime:
+    if opts.use_mtime:
+        return datetime.fromtimestamp(opts.places_file.stat().st_mtime)
+    return run_dt
+
+
 def main(arglist=None):
     print(f"\n{app_title}\n")
 
@@ -787,7 +803,7 @@ def main(arglist=None):
     else:
         print(f"Reading {opts.places_file}")
         con = sqlite3.connect(str(opts.places_file), timeout=1.0)
-        asof = run_dt.strftime("%Y-%m-%d %H:%M")
+        asof = get_asof_date(opts).strftime("%Y-%m-%d %H:%M")
         bookmarks = get_bookmarks(con, opts.host_name, asof)
         con.close()
         print("")

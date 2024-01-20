@@ -1,3 +1,6 @@
+from __future__ import annotations
+
+import os
 import sqlite3
 from datetime import datetime, timedelta
 from pathlib import Path
@@ -89,7 +92,7 @@ def make_fake_places_file(file_path: Path):
 
 
 @pytest.fixture()
-def setup_tmp_source_and_output(tmp_path):
+def setup_tmp_source_and_output(tmp_path) -> tuple[Path, Path]:
     """
     Creates a fake (well, it's a real sqlite db) places.sqlite to
     simulate one created by Firefox, but with only the fields
@@ -203,7 +206,7 @@ def test_html_output(setup_tmp_source_and_output, capsys):
         "--output-folder",
         str(out_dir),
         "--output-name",
-        "test-fbx2-output.html",
+        "test-fbx-output.html",
         "--by-date",
     ]
     result = main(args)
@@ -245,7 +248,7 @@ def test_db_output(setup_tmp_source_and_output, capsys):
         str(src_file),
         "--output-folder",
         str(out_dir),
-        "--output-sqlite=test-fbx2-db-output.sqlite",
+        "--output-sqlite=test-fbx-db-output.sqlite",
     ]
     result = main(args)
     captured = capsys.readouterr()
@@ -258,7 +261,7 @@ def test_db_output(setup_tmp_source_and_output, capsys):
         str(src_file),
         "--output-folder",
         str(out_dir),
-        "--output-sqlite=test-fbx2-db-output.sqlite",
+        "--output-sqlite=test-fbx-db-output.sqlite",
     ]
     result = main(args)
     captured = capsys.readouterr()
@@ -272,7 +275,7 @@ def test_db_output(setup_tmp_source_and_output, capsys):
         str(src_file),
         "--output-folder",
         str(out_dir),
-        "--output-sqlite=test-fbx2-db-output.sqlite",
+        "--output-sqlite=test-fbx-db-output.sqlite",
         "--host-name=other_host",
     ]
     result = main(args)
@@ -284,9 +287,9 @@ def test_db_output(setup_tmp_source_and_output, capsys):
     args = [
         "--output-folder",
         str(out_dir),
-        f"--from-sqlite={out_dir}/test-fbx2-db-output.sqlite",
+        f"--from-sqlite={out_dir}/test-fbx-db-output.sqlite",
         "--output-name",
-        "test-fbx2-output-from-db.html",
+        "test-fbx-output-from-db.html",
         "--by-date",
     ]
     result = main(args)
@@ -294,6 +297,36 @@ def test_db_output(setup_tmp_source_and_output, capsys):
     assert result == 0
     assert "Done." in captured.out
 
-    html_path = out_dir / "test-fbx2-output-from-db.html"
+    html_path = out_dir / "test-fbx-output-from-db.html"
     assert html_path.exists()
     assert "other_host" in html_path.read_text()
+
+
+def test_use_places_file_timestamp(setup_tmp_source_and_output, capsys):
+    src_file, out_dir = setup_tmp_source_and_output
+
+    # Set a specific timestamp on the test places.sqlite file.
+    dt = datetime(2023, 1, 2, 3, 4, 5)
+    dt_str = dt.strftime("%Y-%m-%d %H:%M")
+    ts = dt.timestamp()
+    os.utime(src_file, (ts, ts))
+
+    args = [
+        "--places-file",
+        str(src_file),
+        "--output-folder",
+        str(out_dir),
+        "--output-name",
+        "test-fbx-output.html",
+        "--asof-mtime",
+    ]
+    result = main(args)
+    captured = capsys.readouterr()
+    assert result == 0
+    assert "Done." in captured.out
+    files = list(out_dir.glob("*.html"))
+    assert len(files) == 1
+    out_file = files[0]
+    # Should get 'as of' date-time from places.file timestamp
+    # when --asof-mtime option is used.
+    assert f" as of {dt_str}" in out_file.read_text()
