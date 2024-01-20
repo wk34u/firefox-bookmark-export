@@ -14,9 +14,9 @@ from typing import NamedTuple
 
 app_name = "fbx.py"
 
-app_version = "2024.01.2"
+__version__ = "2024.01.3"
 
-app_title = f"{app_name} (v{app_version})"
+app_title = f"{app_name} (v{__version__})"
 
 run_dt = datetime.now()
 
@@ -41,7 +41,7 @@ class Bookmark(NamedTuple):
     asof_dt: str
 
 
-def get_args(argv):
+def get_args(arglist=None):
     ap = argparse.ArgumentParser(
         description="Exports Firefox bookmarks to a single HTML file."
     )
@@ -124,11 +124,11 @@ def get_args(argv):
         "the current directory)".format(app_name),
     )
 
-    return ap.parse_args(argv[1:])
+    return ap.parse_args(arglist)
 
 
-def get_opts(argv):  # noqa: PLR0912, PLR0915
-    args = get_args(argv)
+def get_opts(arglist=None):  # noqa: PLR0912, PLR0915
+    args = get_args(arglist)
 
     places_file = None
 
@@ -453,9 +453,7 @@ def write_bookmarks_markdown_by_date(
         if n_hosts > 1:
             f.write("(Combined bookmarks from multiple hosts.)\n\n")
         elif bmks:
-            f.write(
-                f"On host **{bmks[0].host_name}** as of **{bmks[0].asof_dt}**.\n\n"
-            )
+            f.write(f"On host **{bmks[0].host_name}** as of **{bmks[0].asof_dt}**.\n\n")
 
         host_str = ""
 
@@ -745,7 +743,7 @@ def insert_bookmarks(
         str(opts.places_file),
         run_dt.strftime("%Y-%m-%d %H:%M:%S"),
         app_name,
-        app_version,
+        __version__,
     )
     exec_sql(cur, stmt, data)
     host_id = cur.lastrowid
@@ -768,10 +766,10 @@ def insert_bookmarks(
     return True
 
 
-def main(argv):
+def main(arglist=None):
     print(f"\n{app_title}\n")
 
-    opts = get_opts(argv)
+    opts = get_opts(arglist)
 
     ok = True
 
@@ -818,4 +816,4 @@ def main(argv):
 
 
 if __name__ == "__main__":
-    sys.exit(main(sys.argv))
+    main()

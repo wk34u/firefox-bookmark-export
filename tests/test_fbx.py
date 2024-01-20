@@ -109,7 +109,7 @@ def setup_tmp_source_and_output(tmp_path):
 
 
 def test_opt_default_profile():
-    args = ["fbx.py"]
+    args = []
     opts = get_opts(args)
     print(f"\n{opts}")
     assert opts.places_file, (
@@ -134,7 +134,7 @@ def test_opt_profile(tmp_path: Path):
     print(f"\n{p2}")
     make_fake_places_file(p2)
 
-    args = ["fbx.py", "--profile", str(tmp_path)]
+    args = ["--profile", str(tmp_path)]
     opts = get_opts(args)
     assert str(p2) == str(opts.places_file), (
         "Should pick the profile with the most recent places.sqlite file when "
@@ -156,13 +156,13 @@ def test_opt_places_file(tmp_path: Path):
     print(f"\n{p2}")
     make_fake_places_file(p2)
 
-    args = ["fbx.py", "--profile", str(p2.parent), "--places-file", str(p1)]
+    args = ["--profile", str(p2.parent), "--places-file", str(p1)]
     opts = get_opts(args)
     assert str(p1) == str(opts.places_file), "--places-file should override --profile"
 
 
 def test_opt_default_output():
-    args = ["fbx.py"]
+    args = []
     opts = get_opts(args)
     print(f"\n{opts}")
     assert isinstance(opts.output_file, Path)
@@ -170,7 +170,7 @@ def test_opt_default_output():
 
 
 def test_opt_output_name():
-    args = ["fbx.py", "--output-name", "myname.txt"]
+    args = ["--output-name", "myname.txt"]
     opts = get_opts(args)
     print(f"\n{opts}")
     assert (
@@ -179,7 +179,7 @@ def test_opt_output_name():
 
 
 def test_opt_md_output_names():
-    args = ["fbx.py", "--output-name", "myname.txt", "--by-date", "--md"]
+    args = ["--output-name", "myname.txt", "--by-date", "--md"]
     opts = get_opts(args)
     print(f"\n{opts}")
     assert opts.md_file.name == "myname.md"
@@ -187,7 +187,7 @@ def test_opt_md_output_names():
 
 
 def test_opt_output_folder(tmp_path):
-    args = ["fbx.py", "--output-folder", str(tmp_path)]
+    args = ["--output-folder", str(tmp_path)]
     opts = get_opts(args)
     print(f"\n{opts}")
     assert str(opts.output_file.parent) == str(
@@ -198,7 +198,6 @@ def test_opt_output_folder(tmp_path):
 def test_html_output(setup_tmp_source_and_output, capsys):
     src_file, out_dir = setup_tmp_source_and_output
     args = [
-        "fbx.py",
         "--places-file",
         str(src_file),
         "--output-folder",
@@ -218,7 +217,6 @@ def test_markdown_output(setup_tmp_source_and_output, capsys):
     out_name = "test-fbx-output.md"
     out_md = out_dir / out_name
     args = [
-        "fbx.py",
         "--places-file",
         str(src_file),
         "--output-folder",
@@ -243,7 +241,6 @@ def test_db_output(setup_tmp_source_and_output, capsys):
 
     #  Read a places.sqlite file and write to a sqlite database.
     args = [
-        "fbx2.py",
         "--places-file",
         str(src_file),
         "--output-folder",
@@ -257,7 +254,6 @@ def test_db_output(setup_tmp_source_and_output, capsys):
 
     #  Read the same places.sqlite file and write to the same sqlite database.
     args = [
-        "fbx2.py",
         "--places-file",
         str(src_file),
         "--output-folder",
@@ -272,7 +268,6 @@ def test_db_output(setup_tmp_source_and_output, capsys):
     #  Read the same places.sqlite file and write to the same sqlite database,
     #  but say it's from a different host (--host-name parameter).
     args = [
-        "fbx2.py",
         "--places-file",
         str(src_file),
         "--output-folder",
@@ -287,7 +282,6 @@ def test_db_output(setup_tmp_source_and_output, capsys):
 
     #  Read the sqlite database and write HTML files.
     args = [
-        "fbx2.py",
         "--output-folder",
         str(out_dir),
         f"--from-sqlite={out_dir}/test-fbx2-db-output.sqlite",

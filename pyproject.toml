@@ -1,3 +1,37 @@
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "fbx"
+dynamic = ["version"]
+description = 'Command-line utility to export Firefox bookmarks.'
+readme = "README.md"
+requires-python = ">=3.8"
+license = {file = "LICENSE"}
+keywords = [ "firefox", "bookmark", "export"]
+
+authors = [
+  { name = "Bill Melvin", email = "bill@billmelvin.com" },
+]
+
+[project.urls]
+Source = "https://github.com/wmelvin/firefox-bookmark-export"
+
+[tool.setuptools.dynamic]
+version = {attr = "fbx.__version__"}
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["fbx*"]
+exclude = ["test*"]
+namespaces = false
+
+[tool.pytest.ini_options]
+pythonpath = ["."]
+
+[project.scripts]
+fbx = "fbx:main"
 
 [tool.ruff]
 line-length = 88
