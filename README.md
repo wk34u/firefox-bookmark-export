@@ -10,19 +10,22 @@ There are additional options for writing to a SQLite database file instead of cr
 
 
 ```
-usage: fbx.py [-h] [--profile PROFILE] [--places-file PLACES_FILE]
-              [--output-name OUTPUT_FILE] [--output-folder OUTPUT_FOLDER]
-              [--by-date] [--md] [--output-sqlite OUTPUT_DB]
-              [--host-name HOST_NAME] [--from-sqlite SOURCE_DB]
+usage: fbx [-h] [--profile PROFILE] [--places-file PLACES_FILE]
+                   [--asof-mtime] [--output-name OUTPUT_FILE]
+                   [--output-folder OUTPUT_FOLDER] [--by-date] [--md]
+                   [--output-sqlite OUTPUT_DB] [--host-name HOST_NAME]
+                   [--from-sqlite SOURCE_DB]
 
 Exports Firefox bookmarks to a single HTML file.
 
-optional arguments:
+options:
   -h, --help            show this help message and exit
   --profile PROFILE     Path to the Firefox profile folder.
   --places-file PLACES_FILE
                         Path to a specific version of the 'places.sqlite'
                         file. Overrides the '--profile' options.
+  --asof-mtime          Use the modified time of the 'places.sqlite' file for
+                        the 'as of' date-time listed in the output files.
   --output-name OUTPUT_FILE
                         Name of the output HTML file.
   --output-folder OUTPUT_FOLDER
