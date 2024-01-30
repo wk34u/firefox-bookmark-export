@@ -10,6 +10,3 @@ pytest = "*"
 rich = "*"
 ruff = "*"
 build = "*"
-
-[requires]
-python_version = "3.12"
