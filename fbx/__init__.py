@@ -14,7 +14,7 @@ from typing import NamedTuple
 
 app_name = "fbx.py"
 
-__version__ = "2024.01.5"
+__version__ = "2024.05.1"
 
 app_title = f"{app_name} (v{__version__})"
 
@@ -231,6 +231,7 @@ def get_opts(arglist=None):  # noqa: PLR0912, PLR0915
 def html_style():
     s = """
         body {
+            background-color: oldlace;
             font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
             padding: 1rem 4rem;
         }

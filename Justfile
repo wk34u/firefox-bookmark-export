@@ -1,28 +1,32 @@
 @default:
   @just --list
 
-@build: test lint check
-  echo 'Run pyproject-build'
+# Run pyproject-build
+@build: check lint test
   pipenv run pyproject-build
 
+#  Run ruff format --check
 @check:
-  echo 'Run ruff format --check'
   pipenv run ruff format --check
 
-@clean:
-  rm dist/*
-  rmdir dist
-  rm fbx.egg-info/*
-  rmdir fbx.egg-info
+# Run check, lint, and test
+@checks: check lint test
 
+# Remove dist and egg-info
+@clean:
+  -rm dist/*
+  -rmdir dist
+  -rm fbx.egg-info/*
+  -rmdir fbx.egg-info
+
+# Run ruff format
 @format:
-  echo 'Run ruff format'
   pipenv run ruff format
 
+# Run ruff check
 @lint:
-  echo 'Run ruff check'
   pipenv run ruff check
 
+# Run pytest
 @test:
-  echo 'Run pytest'
   pipenv run pytest
