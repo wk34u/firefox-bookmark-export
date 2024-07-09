@@ -14,7 +14,7 @@ from typing import NamedTuple
 
 app_name = "fbx.py"
 
-__version__ = "2024.07.1"
+__version__ = "2024.07.2"
 
 app_title = f"{app_name} (v{__version__})"
 
@@ -149,35 +149,47 @@ def get_args(arglist=None):
 def get_opts(arglist=None):  # noqa: PLR0912, PLR0915
     args = get_args(arglist)
 
+    if args.source_db:
+        in_db = Path(args.source_db)
+        if not in_db.exists():
+            sys.stderr.write(f"\nERROR: Cannot find '{in_db}'\n")
+            sys.exit(1)
+    else:
+        in_db = None
+
     places_file = None
 
-    if args.places_file:
-        places_file = Path(args.places_file)
-    else:
-        if args.profile:
-            p = Path(args.profile)
+    #  If the '--from-sqlite' option is used to read data from an existing
+    #  database created by fbx, no Firefox places file is needed.
+    #  Otherwise, get the path to the places file.
+    if in_db is None:
+        if args.places_file:
+            places_file = Path(args.places_file)
         else:
-            windows_appdata = os.getenv("APPDATA")
-            if windows_appdata:
-                p = Path(windows_appdata) / "Mozilla" / "Firefox" / "Profiles"
+            if args.profile:
+                p = Path(args.profile)
             else:
-                p = Path("~/.mozilla/firefox").expanduser().resolve()
+                windows_appdata = os.getenv("APPDATA")
+                if windows_appdata:
+                    p = Path(windows_appdata) / "Mozilla" / "Firefox" / "Profiles"
+                else:
+                    p = Path("~/.mozilla/firefox").expanduser().resolve()
 
-        if not p.exists():
-            sys.stderr.write(f"\nERROR: Cannot find folder '{p}'\n")
+            if not p.exists():
+                sys.stderr.write(f"\nERROR: Cannot find folder '{p}'\n")
+                sys.exit(1)
+
+            files = list(p.glob("**/places.sqlite"))
+            files.sort(key=lambda x: x.stat().st_mtime)
+            places_file = files[-1]
+
+        if places_file:
+            if not places_file.exists():
+                sys.stderr.write(f"\nERROR: Cannot find folder '{p}'\n")
+                sys.exit(1)
+        else:
+            sys.stderr.write("\nERROR: No profile or file name specified.'\n")
             sys.exit(1)
-
-        files = list(p.glob("**/places.sqlite"))
-        files.sort(key=lambda x: x.stat().st_mtime)
-        places_file = files[-1]
-
-    if places_file:
-        if not places_file.exists():
-            sys.stderr.write(f"\nERROR: Cannot find folder '{p}'\n")
-            sys.exit(1)
-    else:
-        sys.stderr.write("\nERROR: No profile or file name specified.'\n")
-        sys.exit(1)
 
     if args.output_folder:
         out_dir = Path(args.output_folder).expanduser().resolve()
@@ -191,14 +203,6 @@ def get_opts(arglist=None):  # noqa: PLR0912, PLR0915
             out_db = out_dir.joinpath(out_db.name)
     else:
         out_db = None
-
-    if args.source_db:
-        in_db = Path(args.source_db)
-        if not in_db.exists():
-            sys.stderr.write(f"\nERROR: Cannot find '{in_db}'\n")
-            sys.exit(1)
-    else:
-        in_db = None
 
     host_name = args.host_name if args.host_name else socket.gethostname()
 
