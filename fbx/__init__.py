@@ -14,7 +14,7 @@ from typing import NamedTuple
 
 app_name = "fbx.py"
 
-__version__ = "2024.05.1"
+__version__ = "2024.07.1"
 
 app_title = f"{app_name} (v{__version__})"
 
@@ -31,6 +31,7 @@ class AppOptions(NamedTuple):
     in_db: Path
     host_name: str
     use_mtime: bool
+    do_update: bool
 
 
 class Bookmark(NamedTuple):
@@ -121,6 +122,15 @@ def get_args(arglist=None):
         help="Use a specified host name, instead of the current machine's "
         "host name. This is useful when reading data from a copy of a "
         "'places.sqlite' file taken from another machine.",
+    )
+
+    ap.add_argument(
+        "--update",
+        dest="do_update",
+        action="store_true",
+        help="Update SQLite output database with the data from the specified "
+        "'places.sqlite' file. This is required if you want to insert "
+        "(replace) data from a host that is already in the database.",
     )
 
     ap.add_argument(
@@ -225,6 +235,7 @@ def get_opts(arglist=None):  # noqa: PLR0912, PLR0915
         in_db,
         host_name,
         args.use_mtime,
+        args.do_update,
     )
 
 
@@ -663,6 +674,9 @@ def db_object_exists(con: sqlite3.Connection, obj_type: str, obj_name: str) -> b
 def create_db_objects(con: sqlite3.Connection):
     cur = con.cursor()
 
+    # Enable foreign key support (https://sqlite.org/foreignkeys.html#fk_enable).
+    exec_sql(cur, "PRAGMA foreign_keys = ON;")
+
     if db_object_exists(con, "table", "hosts"):
         print("Table 'hosts' exists.")
     else:
@@ -689,7 +703,7 @@ def create_db_objects(con: sqlite3.Connection):
             """
             CREATE TABLE bookmarks (
                 id INTEGER PRIMARY KEY,
-                host_id INTEGER,
+                host_id INTEGER REFERENCES hosts(id) ON DELETE CASCADE,
                 title TEXT,
                 url TEXT,
                 parent_path TEXT,
@@ -738,9 +752,14 @@ def insert_bookmarks(
     exec_sql(cur, qry, (opts.host_name,))
     row = cur.fetchone()
     if row:
-        print(f"\nData for host '{opts.host_name}' is already in the database.")
-        print("Duplicate data from same host is not allowed.\n")
-        return False
+        if opts.do_update:
+            print(f"\nUpdating data for host '{opts.host_name}'.")
+            exec_sql(cur, f"DELETE FROM hosts WHERE host_name = '{opts.host_name}';")  # noqa: S608
+            con.commit()
+        else:
+            print(f"\nData for host '{opts.host_name}' is already in the database.")
+            print("Duplicate data from same host is not allowed.\n")
+            return False
 
     stmt = dedent(
         """

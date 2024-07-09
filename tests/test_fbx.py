@@ -332,3 +332,92 @@ def test_use_places_file_timestamp(setup_tmp_source_and_output, capsys):
     # timestamp when the '--asof-mtime' option is used.
     assert f"{dt.strftime('%y%m%d_%H%M')}" in out_file.name
     assert f" as of {dt.strftime('%Y-%m-%d %H:%M')}" in out_file.read_text()
+
+
+def get_db_table_row_count(db_path: Path, table_name: str) -> int:
+    con = sqlite3.connect(str(db_path))
+    cur = con.cursor()
+    cur.execute(f"SELECT COUNT(*) FROM {table_name};")  # noqa: S608
+    n_rows = cur.fetchone()[0]
+    cur.close()
+    con.close()
+    return n_rows
+
+
+def test_get_db_row_count(setup_tmp_source_and_output):
+    src_file, _ = setup_tmp_source_and_output
+    n_rows = get_db_table_row_count(src_file, "moz_bookmarks")
+    assert n_rows == 7
+
+
+def test_db_output_update_by_host(setup_tmp_source_and_output, capsys):
+    src_file, out_dir = setup_tmp_source_and_output
+    out_db = out_dir / "test-fbx-db-output.sqlite"
+
+    #  Read a places.sqlite file and write to a sqlite database.
+    args = [
+        "--places-file",
+        str(src_file),
+        "--output-folder",
+        str(out_dir),
+        f"--output-sqlite={out_db.name}",
+    ]
+    result = main(args)
+    captured = capsys.readouterr()
+    assert result == 0
+    assert "Done." in captured.out
+
+    n_rows = get_db_table_row_count(out_db, "bookmarks")
+    assert n_rows == 3
+
+    #  Read the same places.sqlite file and write to the same sqlite database,
+    #  but say it's from a different host (--host-name parameter).
+    args = [
+        "--places-file",
+        str(src_file),
+        "--output-folder",
+        str(out_dir),
+        f"--output-sqlite={out_db.name}",
+        "--host-name=other_host",
+    ]
+    result = main(args)
+    captured = capsys.readouterr()
+    assert result == 0
+    assert "Done." in captured.out
+    n_rows = get_db_table_row_count(out_db, "bookmarks")
+    assert n_rows == 6
+
+    #  Add a new bookmark to the source.
+    con = sqlite3.connect(str(src_file))
+    cur = con.cursor()
+    #  moz_places: id, url
+    cur.execute(
+        "INSERT INTO moz_places VALUES (?, ?);",
+        (4, "http://www.example.com/page3"),
+    )
+    #  moz_bookmarks: id, fk, title, parent, dateAdded
+    cur.execute(
+        "INSERT INTO moz_bookmarks VALUES (?, ?, ?, ?, ?);",
+        (7, 4, "Example Page 3", 4, moz_date(3)),
+    )
+    con.commit()
+    cur.close()
+    con.close()
+
+    #  Read the updated places.sqlite file and write to the same sqlite database,
+    #  as 'other_host' using the '--update' option.
+    args = [
+        "--places-file",
+        str(src_file),
+        "--output-folder",
+        str(out_dir),
+        f"--output-sqlite={out_db.name}",
+        "--host-name=other_host",
+        "--update",
+    ]
+    result = main(args)
+    captured = capsys.readouterr()
+    assert result == 0
+    assert "Done." in captured.out
+    n_rows = get_db_table_row_count(out_db, "bookmarks")
+    assert n_rows == 7

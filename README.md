@@ -14,7 +14,7 @@ usage: fbx [-h] [--profile PROFILE] [--places-file PLACES_FILE]
                    [--asof-mtime] [--output-name OUTPUT_FILE]
                    [--output-folder OUTPUT_FOLDER] [--by-date] [--md]
                    [--output-sqlite OUTPUT_DB] [--host-name HOST_NAME]
-                   [--from-sqlite SOURCE_DB]
+                   [--update] [--from-sqlite SOURCE_DB]
 
 Exports Firefox bookmarks to a single HTML file.
 
@@ -51,6 +51,10 @@ options:
                         machine's host name. This is useful when reading data
                         from a copy of a 'places.sqlite' file taken from
                         another machine.
+  --update              Update SQLite output database with the data from the
+                        specified 'places.sqlite' file. This is required if
+                        you want to insert (replace) data from a host that is
+                        already in the database.
   --from-sqlite SOURCE_DB
                         Name of a SQLite database, previously created by
                         fbx.py, from which to get the list of bookmarks for
