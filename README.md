@@ -14,7 +14,8 @@ usage: fbx [-h] [--profile PROFILE] [--places-file PLACES_FILE]
                    [--asof-mtime] [--output-name OUTPUT_FILE]
                    [--output-folder OUTPUT_FOLDER] [--by-date] [--md]
                    [--output-sqlite OUTPUT_DB] [--host-name HOST_NAME]
-                   [--update] [--from-sqlite SOURCE_DB]
+                   [--update] [--from-sqlite SOURCE_DB] [--cp-dir CP_DIR]
+                   [--rm-prev]
 
 Exports Firefox bookmarks to a single HTML file.
 
@@ -61,4 +62,8 @@ options:
                         producing the HTML output files. This must be the full
                         path to the file (unless it is in the current
                         directory)
+  --cp-dir CP_DIR       Write a second copy the output files to the specified
+                        directory. Only applies to HTML and Markdown files.
+  --rm-prev             Remove previous output files in the output folder.
+                        Only applies to HTML and Markdown files.
 ```

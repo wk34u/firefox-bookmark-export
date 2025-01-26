@@ -7,7 +7,8 @@ from pathlib import Path
 
 import pytest
 
-from fbx import from_moz_date, get_opts, main
+# from fbx import from_moz_date, get_opts, main
+import fbx
 
 
 def moz_date(days: int) -> int:
@@ -19,11 +20,11 @@ def moz_date(days: int) -> int:
 
 def test_moz_date():
     md = moz_date(0)
-    assert from_moz_date(md) == "2023-01-02 03:04:05"
+    assert fbx.from_moz_date(md) == "2023-01-02 03:04:05"
     md = moz_date(-1)
-    assert from_moz_date(md) == "2023-01-01 03:04:05"
+    assert fbx.from_moz_date(md) == "2023-01-01 03:04:05"
     md = moz_date(1)
-    assert from_moz_date(md) == "2023-01-03 03:04:05"
+    assert fbx.from_moz_date(md) == "2023-01-03 03:04:05"
 
 
 def make_fake_places_file(file_path: Path):
@@ -113,7 +114,7 @@ def setup_tmp_source_and_output(tmp_path) -> tuple[Path, Path]:
 
 def test_opt_default_profile():
     args = []
-    opts = get_opts(args)
+    opts = fbx.get_opts(args)
     print(f"\n{opts}")
     assert opts.places_file, (
         "This will fail if there is no Firefox profile found on the host in "
@@ -138,7 +139,7 @@ def test_opt_profile(tmp_path: Path):
     make_fake_places_file(p2)
 
     args = ["--profile", str(tmp_path)]
-    opts = get_opts(args)
+    opts = fbx.get_opts(args)
     assert str(p2) == str(opts.places_file), (
         "Should pick the profile with the most recent places.sqlite file when "
         "given a parent of the profile location."
@@ -160,13 +161,13 @@ def test_opt_places_file(tmp_path: Path):
     make_fake_places_file(p2)
 
     args = ["--profile", str(p2.parent), "--places-file", str(p1)]
-    opts = get_opts(args)
+    opts = fbx.get_opts(args)
     assert str(p1) == str(opts.places_file), "--places-file should override --profile"
 
 
 def test_opt_default_output():
     args = []
-    opts = get_opts(args)
+    opts = fbx.get_opts(args)
     print(f"\n{opts}")
     assert isinstance(opts.output_file, Path)
     assert "Desktop" in str(opts.output_file)
@@ -174,7 +175,7 @@ def test_opt_default_output():
 
 def test_opt_output_name():
     args = ["--output-name", "myname.txt"]
-    opts = get_opts(args)
+    opts = fbx.get_opts(args)
     print(f"\n{opts}")
     assert (
         opts.output_file.name == "myname.html"
@@ -183,7 +184,7 @@ def test_opt_output_name():
 
 def test_opt_md_output_names():
     args = ["--output-name", "myname.txt", "--by-date", "--md"]
-    opts = get_opts(args)
+    opts = fbx.get_opts(args)
     print(f"\n{opts}")
     assert opts.md_file.name == "myname.md"
     assert opts.md_bydate.name == "myname-bydate.md"
@@ -191,7 +192,7 @@ def test_opt_md_output_names():
 
 def test_opt_output_folder(tmp_path):
     args = ["--output-folder", str(tmp_path)]
-    opts = get_opts(args)
+    opts = fbx.get_opts(args)
     print(f"\n{opts}")
     assert str(opts.output_file.parent) == str(
         tmp_path
@@ -209,10 +210,35 @@ def test_html_output(setup_tmp_source_and_output, capsys):
         "test-fbx-output.html",
         "--by-date",
     ]
-    result = main(args)
+    result = fbx.main(args)
     captured = capsys.readouterr()
     assert result == 0
     assert "Done." in captured.out
+    assert (out_dir / "test-fbx-output.html").exists()
+    assert (out_dir / "test-fbx-output-bydate.html").exists()
+
+
+def test_html_output_w_copy(setup_tmp_source_and_output, capsys):
+    src_file, out_dir = setup_tmp_source_and_output
+    cp_dir = out_dir / "copy"
+    cp_dir.mkdir()
+    args = [
+        "--places-file",
+        str(src_file),
+        "--output-folder",
+        str(out_dir),
+        "--output-name",
+        "test-fbx-output.html",
+        "--by-date",
+        "--cp-dir",
+        str(cp_dir),
+    ]
+    result = fbx.main(args)
+    captured = capsys.readouterr()
+    assert result == 0
+    assert "Done." in captured.out
+    assert (cp_dir / "test-fbx-output.html").exists()
+    assert (cp_dir / "test-fbx-output-bydate.html").exists()
 
 
 def test_markdown_output(setup_tmp_source_and_output, capsys):
@@ -227,12 +253,89 @@ def test_markdown_output(setup_tmp_source_and_output, capsys):
         "--output-name",
         out_name,
         "--md",
+        "--by-date",
     ]
-    result = main(args)
+    result = fbx.main(args)
     captured = capsys.readouterr()
     assert result == 0
     assert "Done." in captured.out
     assert out_md.exists()
+    assert (out_dir / "test-fbx-output-bydate.md").exists()
+
+
+def test_markdown_output_w_copy(setup_tmp_source_and_output, capsys):
+    src_file, out_dir = setup_tmp_source_and_output
+    cp_dir = out_dir / "copy"
+    cp_dir.mkdir()
+    out_name = "test-fbx-output.md"
+    args = [
+        "--places-file",
+        str(src_file),
+        "--output-folder",
+        str(out_dir),
+        "--output-name",
+        out_name,
+        "--md",
+        "--by-date",
+        "--cp-dir",
+        str(cp_dir),
+    ]
+    result = fbx.main(args)
+    captured = capsys.readouterr()
+    assert result == 0
+    assert "Done." in captured.out
+    assert (cp_dir / "test-fbx-output.md").exists()
+    assert (cp_dir / "test-fbx-output-bydate.md").exists()
+
+
+def test_outputs_w_rm_prev(setup_tmp_source_and_output, capsys, monkeypatch):
+    def fake_get_asof_date(use_mtime: bool, places_file: Path, counter=[0]) -> datetime:  # noqa: B006
+        #  The counter default argument is a mutable list that is initialized
+        #  when the function is defined. The list persists between calls, therefore it
+        #  can be incremented and the value will be retained between calls.
+        #  This is a way to simulate a changing date-time value for testing.
+        counter[0] += 1
+        return datetime(2025, 1, 2, 3, counter[0], 5)
+
+    monkeypatch.setattr("fbx.get_asof_date", fake_get_asof_date)
+
+    src_file, out_dir = setup_tmp_source_and_output
+    cp_dir = out_dir / "copy"
+    cp_dir.mkdir()
+    # out_name = "test-fbx-output.md"
+    args = [
+        "--places-file",
+        str(src_file),
+        "--output-folder",
+        str(out_dir),
+        "--host-name",
+        "test_host",
+        "--md",
+        "--by-date",
+        "--cp-dir",
+        str(cp_dir),
+        "--rm-prev",
+    ]
+    result = fbx.main(args)
+    captured = capsys.readouterr()
+    assert result == 0
+    assert "Done." in captured.out
+    out_files = [x for x in out_dir.glob("*") if x.is_file()]
+    assert len(out_files) == 4
+    cp_files = list(cp_dir.glob("*"))
+    assert len(cp_files) == 4
+
+    # Run again with the same options. The '--rm-prev' option should cause
+    # the previous output files to be removed.
+
+    result = fbx.main(args)
+    captured = capsys.readouterr()
+    assert result == 0
+    assert "Done." in captured.out
+    out_files = [x for x in out_dir.glob("*") if x.is_file()]
+    assert len(out_files) == 4
+    cp_files = list(cp_dir.glob("*"))
+    assert len(cp_files) == 4
 
 
 def test_db_output(setup_tmp_source_and_output, capsys):
@@ -250,7 +353,7 @@ def test_db_output(setup_tmp_source_and_output, capsys):
         str(out_dir),
         "--output-sqlite=test-fbx-db-output.sqlite",
     ]
-    result = main(args)
+    result = fbx.main(args)
     captured = capsys.readouterr()
     assert result == 0
     assert "Done." in captured.out
@@ -263,7 +366,7 @@ def test_db_output(setup_tmp_source_and_output, capsys):
         str(out_dir),
         "--output-sqlite=test-fbx-db-output.sqlite",
     ]
-    result = main(args)
+    result = fbx.main(args)
     captured = capsys.readouterr()
     assert result == 1
     assert " already in " in captured.out, "Should not load duplicate data."
@@ -278,7 +381,7 @@ def test_db_output(setup_tmp_source_and_output, capsys):
         "--output-sqlite=test-fbx-db-output.sqlite",
         "--host-name=other_host",
     ]
-    result = main(args)
+    result = fbx.main(args)
     captured = capsys.readouterr()
     assert result == 0
     assert "Done." in captured.out
@@ -292,7 +395,7 @@ def test_db_output(setup_tmp_source_and_output, capsys):
         "test-fbx-output-from-db.html",
         "--by-date",
     ]
-    result = main(args)
+    result = fbx.main(args)
     captured = capsys.readouterr()
     assert result == 0
     assert "Done." in captured.out
@@ -317,7 +420,7 @@ def test_use_places_file_timestamp(setup_tmp_source_and_output, capsys):
         str(out_dir),
         "--asof-mtime",
     ]
-    result = main(args)
+    result = fbx.main(args)
 
     captured = capsys.readouterr()
 
@@ -362,7 +465,7 @@ def test_db_output_update_by_host(setup_tmp_source_and_output, capsys):
         str(out_dir),
         f"--output-sqlite={out_db.name}",
     ]
-    result = main(args)
+    result = fbx.main(args)
     captured = capsys.readouterr()
     assert result == 0
     assert "Done." in captured.out
@@ -380,7 +483,7 @@ def test_db_output_update_by_host(setup_tmp_source_and_output, capsys):
         f"--output-sqlite={out_db.name}",
         "--host-name=other_host",
     ]
-    result = main(args)
+    result = fbx.main(args)
     captured = capsys.readouterr()
     assert result == 0
     assert "Done." in captured.out
@@ -415,7 +518,7 @@ def test_db_output_update_by_host(setup_tmp_source_and_output, capsys):
         "--host-name=other_host",
         "--update",
     ]
-    result = main(args)
+    result = fbx.main(args)
     captured = capsys.readouterr()
     assert result == 0
     assert "Done." in captured.out

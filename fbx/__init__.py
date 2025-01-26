@@ -14,7 +14,7 @@ from typing import NamedTuple
 
 app_name = "fbx.py"
 
-__version__ = "2024.07.2"
+__version__ = "2025.01.1"
 
 app_title = f"{app_name} (v{__version__})"
 
@@ -32,6 +32,9 @@ class AppOptions(NamedTuple):
     host_name: str
     use_mtime: bool
     do_update: bool
+    cp_dir: Path
+    base_name: str
+    rm_prev: bool
 
 
 class Bookmark(NamedTuple):
@@ -143,6 +146,22 @@ def get_args(arglist=None):
         "the current directory)".format(app_name),
     )
 
+    ap.add_argument(
+        "--cp-dir",
+        dest="cp_dir",
+        action="store",
+        help="Write a second copy the output files to the specified directory. "
+        "Only applies to HTML and Markdown files.",
+    )
+
+    ap.add_argument(
+        "--rm-prev",
+        dest="rm_prev",
+        action="store_true",
+        help="Remove previous output files in the output folder. "
+        "Only applies to HTML and Markdown files.",
+    )
+
     return ap.parse_args(arglist)
 
 
@@ -208,10 +227,12 @@ def get_opts(arglist=None):  # noqa: PLR0912, PLR0915
 
     if args.output_file:
         out_file = Path(args.output_file)
-        out_file = Path(out_file.stem).with_suffix(".html")
+        base_name = out_file.stem
+        out_file = Path(base_name).with_suffix(".html")
     else:
         dt_tag = get_asof_date(args.use_mtime, places_file).strftime("%y%m%d_%H%M")
-        out_file = Path(f"Firefox-bookmarks-{host_name}-{dt_tag}.html")
+        base_name = f"Firefox-bookmarks-{host_name}-"
+        out_file = Path(f"{base_name}{dt_tag}.html")
 
     output_file = out_dir.joinpath(out_file.name)
 
@@ -229,6 +250,13 @@ def get_opts(arglist=None):  # noqa: PLR0912, PLR0915
         if bydate_file:
             md_bydate = bydate_file.parent.joinpath(f"{bydate_file.stem}.md")
 
+    if args.cp_dir:
+        cp_dir = Path(args.cp_dir).expanduser().resolve()
+        if not cp_dir.exists():
+            sys.stderr.write(f"\nERROR: Cannot find folder '{cp_dir}'\n")
+    else:
+        cp_dir = None
+
     return AppOptions(
         places_file,
         output_file,
@@ -240,6 +268,9 @@ def get_opts(arglist=None):  # noqa: PLR0912, PLR0915
         host_name,
         args.use_mtime,
         args.do_update,
+        cp_dir,
+        base_name,
+        args.rm_prev,
     )
 
 
@@ -335,15 +366,15 @@ def htm_url(url: str) -> str:
     return url.replace("&", "%26")
 
 
-def write_bookmarks_html(file_name: str, bmks: list[Bookmark]):
-    print(f"Writing '{file_name}'")
+def write_bookmarks_html(html_file: Path, bmks: list[Bookmark], cp_dir: Path):
+    print(f"Writing '{html_file}'")
 
     #  https://docs.python.org/3/howto/sorting.html#sort-stability-and-complex-sorts
     bmks.sort(key=lambda item: item.title.lower())
     bmks.sort(key=lambda item: item.parent_path.lower())
     bmks.sort(key=lambda item: item.host_name.lower())
 
-    with Path(file_name).open("w") as f:
+    with html_file.open("w") as f:
         f.write(html_head("Bookmarks"))
 
         last_host = ""
@@ -379,17 +410,23 @@ def write_bookmarks_html(file_name: str, bmks: list[Bookmark]):
             )
             f.write(indent(s, " " * 8))
         f.write(html_tail())
+    if cp_dir:
+        cp_file = cp_dir / html_file.name
+        print(f"Copying to '{cp_file}'")
+        cp_file.write_text(html_file.read_text())
 
 
-def write_bookmarks_by_date_html(file_name: str, n_hosts: int, bmks: list[Bookmark]):
-    print(f"Writing '{file_name}'")
+def write_bookmarks_by_date_html(
+    html_file: Path, n_hosts: int, bmks: list[Bookmark], cp_dir: Path
+):
+    print(f"Writing '{html_file}'")
 
     #  Re-sort bookmarks list.
     bmks.sort(key=lambda item: item.host_name.lower())
     bmks.sort(key=lambda item: item.url)
     bmks.sort(key=lambda item: item.when_added, reverse=True)
 
-    with Path(file_name).open("w") as f:
+    with html_file.open("w") as f:
         f.write(html_head("Bookmarks by Date Added"))
 
         if n_hosts > 1:
@@ -428,16 +465,20 @@ def write_bookmarks_by_date_html(file_name: str, n_hosts: int, bmks: list[Bookma
             )
             f.write(indent(s, " " * 8))
         f.write(html_tail())
+    if cp_dir:
+        cp_file = cp_dir / html_file.name
+        print(f"Copying to '{cp_file}'")
+        cp_file.write_text(html_file.read_text())
 
 
-def write_bookmarks_markdown(file_name: str, bmks: list[Bookmark]):
-    print(f"Writing '{file_name}'")
+def write_bookmarks_markdown(md_file: Path, bmks: list[Bookmark], cp_dir: Path):
+    print(f"Writing '{md_file}'")
 
     bmks.sort(key=lambda item: item.title.lower())
     bmks.sort(key=lambda item: item.parent_path.lower())
     bmks.sort(key=lambda item: item.host_name.lower())
 
-    with Path(file_name).open("w") as f:
+    with md_file.open("w") as f:
         f.write("# Bookmarks\n\n")
 
         last_host = ""
@@ -460,19 +501,23 @@ def write_bookmarks_markdown(file_name: str, bmks: list[Bookmark]):
                 run_dt.strftime("%Y-%m-%d %H:%M"), app_title
             )
         )
+    if cp_dir:
+        cp_file = cp_dir / md_file.name
+        print(f"Copying to '{cp_file}'")
+        cp_file.write_text(md_file.read_text())
 
 
 def write_bookmarks_markdown_by_date(
-    file_name: str, n_hosts: int, bmks: list[Bookmark]
+    md_file: Path, n_hosts: int, bmks: list[Bookmark], cp_dir: Path
 ):
-    print(f"Writing '{file_name}'")
+    print(f"Writing '{md_file}'")
 
     #  Re-sort bookmarks list. Ascending when_added for Markdown output.
     bmks.sort(key=lambda item: item.host_name.lower())
     bmks.sort(key=lambda item: item.url)
     bmks.sort(key=lambda item: item.when_added)
 
-    with Path(file_name).open("w") as f:
+    with md_file.open("w") as f:
         f.write("# Bookmarks by Date Added\n\n")
 
         if n_hosts > 1:
@@ -499,6 +544,10 @@ def write_bookmarks_markdown_by_date(
                 run_dt.strftime("%Y-%m-%d %H:%M"), app_title
             )
         )
+    if cp_dir:
+        cp_file = cp_dir / md_file.name
+        print(f"Copying to '{cp_file}'")
+        cp_file.write_text(md_file.read_text())
 
 
 def get_parent_path(con, bookmark_parent_id):
@@ -805,6 +854,12 @@ def get_asof_date(use_mtime: bool, places_file: Path) -> datetime:
     return run_dt
 
 
+def remove_previous_files(from_path: Path, base_name: str) -> None:
+    for f in from_path.glob(f"{base_name}*"):
+        print(f"Removing '{f}'")
+        f.unlink()
+
+
 def main(arglist=None):
     print(f"\n{app_title}\n")
 
@@ -816,11 +871,17 @@ def main(arglist=None):
         print(f"Reading {opts.in_db}")
         con = sqlite3.connect(str(opts.in_db))
         n_hosts, bookmarks = get_bookmarks_from_db(con)
-        write_bookmarks_html(str(opts.output_file), bookmarks)
+
+        write_bookmarks_html(opts.output_file, bookmarks, opts.cp_dir)
+
         if opts.md_file:
-            write_bookmarks_markdown(str(opts.md_file), bookmarks)
+            write_bookmarks_markdown(opts.md_file, bookmarks, opts.cp_dir)
+
         if opts.bydate_file:
-            write_bookmarks_by_date_html(str(opts.bydate_file), n_hosts, bookmarks)
+            write_bookmarks_by_date_html(
+                opts.bydate_file, n_hosts, bookmarks, opts.cp_dir
+            )
+
         if opts.md_bydate:
             write_bookmarks_markdown_by_date(str(opts.md_bydate), n_hosts, bookmarks)
     else:
@@ -842,13 +903,24 @@ def main(arglist=None):
             ok = insert_bookmarks(db, opts, bookmarks)
             db.close()
         else:
-            write_bookmarks_html(str(opts.output_file), bookmarks)
+            if opts.rm_prev:
+                remove_previous_files(opts.output_file.parent, opts.base_name)
+                remove_previous_files(opts.cp_dir, opts.base_name)
+
+            write_bookmarks_html(opts.output_file, bookmarks, opts.cp_dir)
+
             if opts.md_file:
-                write_bookmarks_markdown(str(opts.md_file), bookmarks)
+                write_bookmarks_markdown(opts.md_file, bookmarks, opts.cp_dir)
+
             if opts.bydate_file:
-                write_bookmarks_by_date_html(str(opts.bydate_file), 1, bookmarks)
+                write_bookmarks_by_date_html(
+                    opts.bydate_file, 1, bookmarks, opts.cp_dir
+                )
+
             if opts.md_bydate:
-                write_bookmarks_markdown_by_date(str(opts.md_bydate), 1, bookmarks)
+                write_bookmarks_markdown_by_date(
+                    opts.md_bydate, 1, bookmarks, opts.cp_dir
+                )
 
     if ok:
         print("\nDone.\n")
