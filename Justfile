@@ -3,11 +3,11 @@
 
 # Run pyproject-build
 @build: check lint test
-  pipenv run pyproject-build
+  uv build
 
 #  Run ruff format --check
 @check:
-  pipenv run ruff format --check
+  uv run ruff format --check
 
 # Run check, lint, and test
 @checks: check lint test
@@ -21,12 +21,12 @@
 
 # Run ruff format
 @format:
-  pipenv run ruff format
+  uv run ruff format
 
 # Run ruff check
 @lint:
-  pipenv run ruff check
+  uv run ruff check
 
 # Run pytest
 @test:
-  pipenv run pytest
+  uv run pytest

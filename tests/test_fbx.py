@@ -177,9 +177,9 @@ def test_opt_output_name():
     args = ["--output-name", "myname.txt"]
     opts = fbx.get_opts(args)
     print(f"\n{opts}")
-    assert (
-        opts.output_file.name == "myname.html"
-    ), "File name suffix should always be '.html'."
+    assert opts.output_file.name == "myname.html", (
+        "File name suffix should always be '.html'."
+    )
 
 
 def test_opt_md_output_names():
@@ -194,9 +194,9 @@ def test_opt_output_folder(tmp_path):
     args = ["--output-folder", str(tmp_path)]
     opts = fbx.get_opts(args)
     print(f"\n{opts}")
-    assert str(opts.output_file.parent) == str(
-        tmp_path
-    ), "Output file should be in specified folder."
+    assert str(opts.output_file.parent) == str(tmp_path), (
+        "Output file should be in specified folder."
+    )
 
 
 def test_html_output(setup_tmp_source_and_output, capsys):

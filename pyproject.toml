@@ -67,3 +67,11 @@ ignore = [
     "S101",     # assert
     "PLR2004",  # magic value
 ]
+
+[dependency-groups]
+dev = [
+    "build>=1.2.2.post1",
+    "pytest>=8.3.5",
+    "rich>=14.0.0",
+    "ruff>=0.11.8",
+]
