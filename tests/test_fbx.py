@@ -241,6 +241,28 @@ def test_html_output_w_copy(setup_tmp_source_and_output, capsys):
     assert (cp_dir / "test-fbx-output-bydate.html").exists()
 
 
+def test_html_output_w_copy_dest_missing(setup_tmp_source_and_output, capsys):
+    src_file, out_dir = setup_tmp_source_and_output
+    cp_dir = out_dir / "copy"
+    #  cp_dir.mkdir()  # Do not create the directory.
+    args = [
+        "--places-file",
+        str(src_file),
+        "--output-folder",
+        str(out_dir),
+        "--output-name",
+        "test-fbx-output.html",
+        "--by-date",
+        "--cp-dir",
+        str(cp_dir),
+    ]
+    with pytest.raises(SystemExit):
+        result = fbx.main(args)
+        assert result == 1
+    captured = capsys.readouterr()
+    assert "ERROR: Cannot find folder" in captured.err
+
+
 def test_markdown_output(setup_tmp_source_and_output, capsys):
     src_file, out_dir = setup_tmp_source_and_output
     out_name = "test-fbx-output.md"

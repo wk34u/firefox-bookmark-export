@@ -14,7 +14,7 @@ from typing import NamedTuple
 
 app_name = "fbx.py"
 
-__version__ = "2025.01.1"
+__version__ = "2025.05.1"
 
 app_title = f"{app_name} (v{__version__})"
 
@@ -254,6 +254,7 @@ def get_opts(arglist=None):  # noqa: PLR0912, PLR0915
         cp_dir = Path(args.cp_dir).expanduser().resolve()
         if not cp_dir.exists():
             sys.stderr.write(f"\nERROR: Cannot find folder '{cp_dir}'\n")
+            sys.exit(1)
     else:
         cp_dir = None
 

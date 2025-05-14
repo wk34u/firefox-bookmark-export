@@ -5,10 +5,10 @@ notes-private.txt
 # Python.
 venv/
 __pycache__/
+*.egg-info/
 
 # Tools config.
 .vscode/
 
 # App-specific.
-_0_bak/
-
+output/
